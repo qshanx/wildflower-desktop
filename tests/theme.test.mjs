@@ -17,6 +17,8 @@ test('desktop seed path, feedback, pause, and reload persistence', async () => {
   try {
     browser = await chromium.launch();
     const page = await browser.newPage({viewport: {width:1512, height:982}});
+    // The seed path must run in daylight so night fireflies cannot consume planting clicks.
+    await page.clock.setFixedTime(new Date(2026, 10, 15, 12));
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
     await page.evaluate(() => {

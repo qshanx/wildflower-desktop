@@ -118,6 +118,7 @@ internal sealed class DesktopMouse : IDisposable
     private readonly Native.MouseProc callback;
     private nint hook;
     private bool leftButtonDown;
+    private long lastHover;
     internal DesktopMouse(Control dispatcher, Action<uint, Native.POINT> receive)
     {
         callback = (code, message, pointer) =>
@@ -126,8 +127,11 @@ internal sealed class DesktopMouse : IDisposable
             {
                 if ((uint)message == 0x0201) leftButtonDown = true;
                 else if ((uint)message == 0x0202) leftButtonDown = false;
-                if (((uint)message != 0x0200 || leftButtonDown) && !dispatcher.IsDisposed && dispatcher.IsHandleCreated)
+                var now = Environment.TickCount64;
+                var hover = (uint)message == 0x0200 && !leftButtonDown;
+                if ((!hover || now - lastHover >= 50) && !dispatcher.IsDisposed && dispatcher.IsHandleCreated)
                 {
+                    if (hover) lastHover = now;
                     var data = Marshal.PtrToStructure<Native.MouseData>(pointer);
                     try { dispatcher.BeginInvoke(() => receive((uint)message, data.Point)); }
                     catch (InvalidOperationException) { }

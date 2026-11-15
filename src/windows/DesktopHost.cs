@@ -185,6 +185,8 @@ internal sealed class DesktopHost : Form
         }
     }
 
+    private bool desktopHover;
+
     private async void OnMouse(uint message, Native.POINT point)
     {
         if (!ready || paused || closing) return;
@@ -195,16 +197,20 @@ internal sealed class DesktopHost : Form
                 if (held) { held = false; await Core.ExecuteScriptAsync("window.meadowDesktop('up',0,0)"); }
                 return;
             }
-            if (message == 0x0200 && !held) return;
-            if (!shell.IsEmptyDesktop(point))
+            if (!shell.IsEmptyDesktop(point) || !Native.ScreenToClient(Handle, ref point) || !ClientRectangle.Contains(point.X, point.Y))
             {
                 if (held) { held = false; await Core.ExecuteScriptAsync("window.meadowDesktop('up',0,0)"); }
+                if (desktopHover)
+                {
+                    desktopHover = false;
+                    await Core.ExecuteScriptAsync("window.meadowDesktop('hover',-1,-1)");
+                }
                 return;
             }
-            if (!Native.ScreenToClient(Handle, ref point) || !ClientRectangle.Contains(point.X, point.Y)) return;
             if (message == 0x0201) held = true;
             // Native points are physical pixels (PerMonitorV2); page coordinates are CSS pixels.
-            var action = message == 0x0201 ? "windowsDown" : "drag";
+            var action = message == 0x0201 ? "windowsDown" : held ? "drag" : "hover";
+            if (action == "hover") desktopHover = true;
             await Core.ExecuteScriptAsync($"window.meadowDesktop('{action}',{point.X}*innerWidth/{Math.Max(1, ClientSize.Width)},{point.Y}*innerHeight/{Math.Max(1, ClientSize.Height)})");
         }
         catch (Exception ex) { HostFailed?.Invoke("桌面互动已暂停：" + ex.Message); ready = false; }

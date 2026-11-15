@@ -12,6 +12,8 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
     var painting = false
     var plainClick = false
     var mounted = false
+    var lastHover: TimeInterval = 0
+    var desktopHover = false
     var lastDrag: TimeInterval = 0
     var checkingReload = false
 
@@ -78,7 +80,7 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
         action("wallpaper", 1)
         desktop.orderBack(nil)
         action("visible", 1)
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) {
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .mouseMoved]) {
             [weak self] event in self?.desktopEvent(event)
         }
 
@@ -105,6 +107,11 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
 
     func desktopEvent(_ event: NSEvent) {
         if event.type == .leftMouseUp { stopPainting(); return }
+        let tracking = event.type == .mouseMoved
+        if tracking {
+            guard event.timestamp - lastHover >= 1.0 / 20 else { return }
+            lastHover = event.timestamp
+        }
         let modifiers = event.modifierFlags.intersection([.option, .control, .command, .shift])
         guard mounted, modifiers.isEmpty || modifiers == .option,
               let point = event.cgEvent?.location else { stopPainting(); return }
@@ -114,8 +121,12 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
         let location = NSEvent.mouseLocation
         guard desktop.frame.contains(location),
               desktop.screen?.visibleFrame.contains(location) == true,
-              exposedDesktop(at: point) else { stopPainting(); return }
+              exposedDesktop(at: point) else {
+            if desktopHover { action("hover", -1, -1); desktopHover = false }
+            stopPainting(); return
+        }
         let x = location.x - desktop.frame.minX, y = desktop.frame.maxY - location.y
+        if tracking { desktopHover = true; action("hover", x, y); return }
         if event.type == .leftMouseDown {
             painting = true
             plainClick = modifiers.isEmpty
@@ -169,6 +180,7 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
                 (() => {
                   const s = JSON.parse(localStorage.getItem('pond-garden-v2'));
                   return s.flowers.length >= 2 && s.vase.length === 1 && !s.held && s.lanterns.length === 1 &&
+                    s.vase[0].kind === 1 && [2,3].includes(s.vase[0].tile) &&
                     document.querySelector('#vase span').textContent.includes('1') &&
                     document.querySelector('#effects').value === 'still';
                 })()
@@ -222,7 +234,10 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
           point('pointerdown',.29,.75); point('pointermove',.67,.87); point('pointerup',.67,.87);
           if (state().flowers.length < 3 || state().flowers[0].kind !== 1) throw Error('Drag did not sow selected seeds');
           const planted=gardenLayout().find(p=>p.f.id===state().flowers[0].id);
-          $('basket').click(); $('shears').click(); click(planted.x,planted.y);
+          meadowDesktop('wallpaper',1,0);
+          desktopClick($('shears'));
+          if ($('shears').getAttribute('aria-pressed')!=='true') throw Error('Desktop did not select scissors');
+          meadowDesktop('plainDown',planted.x*innerWidth,planted.y*innerHeight);meadowDesktop('up');
           if (state().held || !$('status').textContent.includes('还没开花')) throw Error('Immature plant could be cut');
           return true;
         })()
@@ -239,11 +254,14 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
                   const beforePaint = [document.querySelector('#field').width,document.querySelector('#field').height];
                   if (beforePaint[0]*beforePaint[1]>1920*1080) throw Error('Canvas too large');
                   const planted=gardenLayout().find(p=>p.f.id===state().flowers[0].id);
-                  meadowDesktop('down',planted.x*innerWidth,planted.y*innerHeight);
+                  meadowDesktop('plainDown',planted.x*innerWidth,planted.y*innerHeight);
                   meadowDesktop('up');
-                  if (state().flowers.length !== before-1 || state().held?.kind !== 1) throw Error('Cutting failed');
-                  document.querySelector('#vase').click();
-                  if (state().vase.length !== 1 || state().held) throw Error('Vase rejected stem');
+                  const stem=state().held;
+                  if (state().flowers.length !== before-1 || stem?.id !== planted.f.id || stem?.tile !== planted.tile) throw Error('Cutting failed: '+document.querySelector('#status').textContent+' · '+document.elementFromPoint(planted.x*innerWidth,planted.y*innerHeight)?.id+' · '+stage(planted.f,Date.now()));
+                  const b=document.querySelector('#vase').getBoundingClientRect();
+                  meadowDesktop('plainDown',b.x+b.width/2,b.y+b.height/2);meadowDesktop('up');
+                  if (state().vase[0]?.id !== stem.id || state().vase[0]?.tile !== stem.tile || state().held) throw Error('Vase rejected stem');
+                  meadowDesktop('wallpaper',0,0);
                   select(0);
                   const dated=new Date();dated.setHours(22,0,0,0);Date.now=()=>dated.getTime();
                   draw(performance.now());

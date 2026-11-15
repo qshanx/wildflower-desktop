@@ -126,7 +126,7 @@ try{
 }catch{storageReadable=false;}
 let renderedFrames=0;
 const diagnosticsEnabled=new URLSearchParams(location.search).get("diagnostics")==="1";
-let W,H,tool=0,plantingMode=false,drawing=null,previous=null,frame=0,ambient=0,stageTimer=0,statusTimer=0,particles=[],visible=true,tourStart=null,carriedFly=null;
+let W,H,tool=0,plantingMode=false,drawing=null,previous=null,dragGap=0,frame=0,ambient=0,stageTimer=0,statusTimer=0,particles=[],visible=true,tourStart=null,carriedFly=null;
 const visibleFlies=[], capturedFlies=new Set();
 let wasNight=false;
 const wild=[];
@@ -161,23 +161,24 @@ function sceneHour(now){
   return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600;
 }
 function gatherWildflowers(){
-  const clumps=Array.from({length:143},(_,i)=>{
+  const clumps=Array.from({length:164},(_,i)=>{
     const j=Math.floor(sceneRandom()*bank.length),a=bank[j],b=bank[(j+1)%bank.length],v=sceneRandom();
     const x=a[0]*(1-v)+b[0]*v,y=a[1]*(1-v)+b[1]*v;
-    const r=i<104?1.015+sceneRandom()*.30:1.27+sceneRandom()*.43;
-    return {x:.58+(x-.58)*r,y:.46+(y-.46)*r,
-      kind:Math.floor(sceneRandom()*palette.length),early:sceneRandom(),radius:.012+sceneRandom()*.038};
+    const r=1.05+sceneRandom()*.38;
+    const u=i<104?.58+(x-.58)*r:sceneRandom();
+    const w=i<104?.46+(y-.46)*r:sceneRandom();
+    return {x:u,y:w,kind:Math.floor(sceneRandom()*palette.length),early:sceneRandom(),radius:.018+sceneRandom()*.041};
   });
   for(const patch of clumps){
     const n=5+Math.floor(sceneRandom()*7);
     for(let i=0;i<n;i++){
       const a=sceneRandom()*TWO_PI,r=Math.sqrt(sceneRandom())*patch.radius;
       const x=patch.x+Math.cos(a)*r,y=patch.y+Math.sin(a)*r*1.32;
-      if(!(x>.012&&x<.997&&y>.025&&y<.98)||inWater(x,y+.012))continue;
-      const kind=sceneRandom()<.77?patch.kind:Math.floor(sceneRandom()*palette.length);
+      if(!(x>.012&&x<.997&&y>.025&&y<.98)||inWater(x,y))continue;
+      const kind=sceneRandom()<.55?patch.kind:Math.floor(sceneRandom()*palette.length);
       const tiles=botanicalKinds[kind], tile=tiles[Math.floor(sceneRandom()*tiles.length)];
       wild.push({x,y,kind,tile,size:(.19+Math.pow(sceneRandom(),1.4)*.52)*(.82+y*.36),
-        opens:6.8+patch.early*5.9+sceneRandom()*1.5,wave:sceneRandom()*TWO_PI,
+        opens:6.5+patch.early*4.1+sceneRandom()*1.3,wave:sceneRandom()*TWO_PI,
         lean:(sceneRandom()-.5)*.89,flip:sceneRandom()<.5?-1:1,motion:sceneRandom()<.22});
     }
   }
@@ -420,6 +421,42 @@ function botanicalSprite(tile,x,y,z,angle,flip){
   c.drawImage(botanical,(tile%4)*128,Math.floor(tile/4)*128,128,128,-w*.5,-w*.96,w,w);
   c.restore();
 }
+function nearestBank(x,y){
+  let best, distance=Infinity;
+  for(let i=0;i<bank.length;i++){
+    const [a,b]=bank[i],[u,v]=bank[(i+1)%bank.length];
+    const dx=(u-a)*1.6,dy=v-b;
+    const t=clamp(((x-a)*1.6*dx+(y-b)*dy)/(dx*dx+dy*dy));
+    const px=a+(u-a)*t,py=b+(v-b)*t,d=((x-px)*1.6)**2+(y-py)**2;
+    if(d<distance){best=[px,py];distance=d;}
+  }
+  return best;
+}
+let lastPlants, garden=[];
+function gardenLayout(){
+  if(lastPlants===data.flowers && garden.length===data.flowers.length)return garden;
+  lastPlants=data.flowers;
+  garden=data.flowers.map(f=>{
+    let seed=2166136261;
+    for(const ch of f.id)seed=Math.imul(seed^ch.charCodeAt(0),16777619);
+    const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+    let {x,y}=f;
+    if(inWater(x,y)){
+      const [bx,by]=nearestBank(x,y),a=1.035+random()*.11;
+      x=.58+(bx-.58)*a;y=.46+(by-.46)*a;
+    }
+    const close=data.flowers.some(p=>p!==f&&Math.hypot((p.x-f.x)*1.6,p.y-f.y)<.028);
+    if(close){
+      const a=random()*TWO_PI,r=.009+random()*.022;
+      const u=x+Math.cos(a)*r/1.6,v=y+Math.sin(a)*r;
+      if(shore(u,v)){x=u;y=v;}
+    }
+    const tiles=botanicalKinds[f.kind];
+    return {f,x,y,tile:tiles[Math.floor(random()*tiles.length)],size:.32+random()*.29,
+      lean:(random()-.5)*.65,flip:random()<.5?-1:1};
+  }).sort((a,b)=>a.y-b.y);
+  return garden;
+}
 function draw(t){
   frame=0;c.clearRect(0,0,W,H);
   const now=Date.now(), z=scale();
@@ -448,11 +485,13 @@ function draw(t){
     }
     c.globalAlpha=1;
   }
-  const list=[...data.flowers].sort((a,b)=>a.y-b.y);
-  for(const f of list){
-    const phase=stage(f,now),x=f.x*W,y=f.y*H,lean=((f.x*657)%1-.5)*.25;
-    if(phase===3&&botanical.naturalWidth)botanicalSprite(botanicalKinds[f.kind][0],x,y,z*.76,lean,1);
-    else sprite(f,phase,x,y,z,lean);
+  for(const p of gardenLayout()){
+    const {f,lean,flip,tile}=p,phase=stage(f,now),x=p.x*W,y=p.y*H,size=z*p.size;
+    if(phase===3&&botanical.naturalWidth){
+      oval(c,x,y+size,13*size,4*size,0,'rgba(22,40,20,.27)');
+      botanicalSprite(tile,x,y,size,lean,flip);
+      c.globalAlpha=.78;botanicalSprite(11,x+size*4,y+size*3,size*.46,-lean,flip);c.globalAlpha=1;
+    }else sprite(f,phase,x,y,size*1.42,lean);
   }
   const b=vase.getBoundingClientRect(), baseX=b.left+b.width*.5, baseY=b.top+b.height*.55;
   const n=data.vase.length;
@@ -499,12 +538,12 @@ function sow(x,y,feedback){
 }
 function plantStatus(x,y){
   let best=null,dist=26*scale();
-  const now=Date.now();
-  for(const f of data.flowers){
-    const height=[3,18,34,48][stage(f,now)]*scale();
-    const dx=f.x*W-x, dy=f.y*H-y;
-    const p=Math.hypot(dx,dy-Math.max(0,Math.min(height,dy)));
-    if(p<dist){dist=p;best=f;}
+  const now=Date.now(),z=scale();
+  for(const p of gardenLayout()){
+    const f=p.f,phase=stage(f,now),height=(phase===3?72:[4,25,48][phase])*p.size*z;
+    const dx=p.x*W-x,dy=p.y*H-y;
+    const hitDistance=Math.hypot(dx,dy-Math.max(0,Math.min(height,dy)));
+    if(hitDistance<dist){dist=hitDistance;best=f;}
   }
   if(!best){info('点一株已经开花的花。');return;}
   if(stage(best,Date.now())<3){info('这株还没开花。');return;}
@@ -576,12 +615,20 @@ function begin(id,x,y){
 }
 function move(id,x,y){
   if(drawing!==id)return;
-  const [a,b]=previous,dist=Math.hypot(x-a,y-b),gap=20*scale();
-  for(let d=gap;d<=dist;d+=gap){const u=a+(x-a)*d/dist,v=b+(y-b)*d/dist;sow(u,v,false);previous=[u,v];}
+  const [a,b]=previous,dist=Math.hypot(x-a,y-b),z=scale();
+  if(!dragGap)dragGap=(19+Math.random()*27)*z;
+  for(let d=dragGap;d<=dist;d+=dragGap){
+    const u=a+(x-a)*d/dist,v=b+(y-b)*d/dist;
+    const spread=(Math.random()-.5)*38*z,jx=u-(y-b)*spread/dist,jy=v+(x-a)*spread/dist;
+    if(shore(u/W,v/H)){
+      if(shore(jx/W,jy/H))sow(jx,jy,false);else sow(u,v,false);
+    }
+    previous=[u,v];dragGap=(19+Math.random()*27)*z;
+  }
 }
 function finish(id){
   if(drawing===null || (id!==undefined && drawing!==id))return;
-  drawing=null;previous=null;persist();scheduleGrowth();
+  drawing=null;previous=null;dragGap=0;persist();scheduleGrowth();
 }
 makeAtlas();gatherWildflowers();sync();
 if(!storageReadable)info('旧存档无法读取，已保留原文件。当前种植暂不保存。');

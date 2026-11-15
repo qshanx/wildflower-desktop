@@ -221,7 +221,8 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
           meadowDesktop('wallpaper',0,0);
           point('pointerdown',.29,.75); point('pointermove',.67,.87); point('pointerup',.67,.87);
           if (state().flowers.length < 3 || state().flowers[0].kind !== 1) throw Error('Drag did not sow selected seeds');
-          $('basket').click(); $('shears').click(); click(.29,.75);
+          const planted=gardenLayout().find(p=>p.f.id===state().flowers[0].id);
+          $('basket').click(); $('shears').click(); click(planted.x,planted.y);
           if (state().held || !$('status').textContent.includes('还没开花')) throw Error('Immature plant could be cut');
           return true;
         })()
@@ -237,7 +238,8 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
                   const before = state().flowers.length;
                   const beforePaint = [document.querySelector('#field').width,document.querySelector('#field').height];
                   if (beforePaint[0]*beforePaint[1]>1920*1080) throw Error('Canvas too large');
-                  meadowDesktop('down',.29*innerWidth,.75*innerHeight);
+                  const planted=gardenLayout().find(p=>p.f.id===state().flowers[0].id);
+                  meadowDesktop('down',planted.x*innerWidth,planted.y*innerHeight);
                   meadowDesktop('up');
                   if (state().flowers.length !== before-1 || state().held?.kind !== 1) throw Error('Cutting failed');
                   document.querySelector('#vase').click();

@@ -53,6 +53,25 @@ test('desktop seed path, feedback, pause, and reload persistence', async () => {
     await page.reload();
     await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
     assert.equal(await page.evaluate(() => meadowDiagnostics().flowerCount),1,'reload preserves flower');
+    const legacySave = await page.evaluate(() => {
+      const save = JSON.parse(localStorage.getItem('pond-garden-v2'));
+      Object.assign(save.flowers[0],{x:.30,y:.41,at:Date.now()-6*60*60*1000});
+      const raw = JSON.stringify(save);
+      localStorage.setItem('pond-garden-v2',raw);
+      return raw;
+    });
+    await page.reload();
+    await page.waitForFunction(() => meadowDiagnostics().ready);
+    const root = await page.evaluate(() => {
+      const [{x,y,f}] = gardenLayout();
+      return {x,y,onLand:shore(x,y),wasInWater:inWater(f.x,f.y)};
+    });
+    assert.ok(root.wasInWater&&root.onLand,'legacy flowers rooted in the pond must appear on the bank');
+    assert.equal(await page.evaluate(() => localStorage.getItem('pond-garden-v2')),legacySave,'rendering must not rewrite the save');
+    await page.locator('#basket').click();
+    await page.locator('#shears').click();
+    await page.mouse.click(root.x*1512,root.y*982);
+    assert.equal(await page.evaluate(() => meadowDiagnostics().flowerCount),0,'cutting targets the flower at its visible position');
     await page.evaluate(() => localStorage.setItem('pond-garden-v2','broken prior garden'));
     await page.reload();
     await page.waitForFunction(() => window.meadowDiagnostics?.().ready);

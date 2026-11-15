@@ -161,9 +161,28 @@ internal sealed class DesktopHost : Form
 
     internal async Task PauseForSwitchAsync()
     {
-        ready = false;
-        await FlushAsync();
-        await SetPausedAsync(true);
+        var wasReady = ready;
+        var wasPaused = paused;
+        try
+        {
+            await FlushAsync();
+            ready = false;
+            await SetPausedAsync(true);
+        }
+        catch (Exception failure)
+        {
+            ready = false;
+            try
+            {
+                await SetPausedAsync(wasPaused, force: true);
+                ready = wasReady;
+            }
+            catch (Exception recoveryFailure)
+            {
+                throw new InvalidOperationException("更新已取消，但主题恢复失败，请重新应用主题。", new AggregateException(failure, recoveryFailure));
+            }
+            throw;
+        }
     }
 
     private async void OnMouse(uint message, Native.POINT point)
@@ -211,14 +230,15 @@ internal sealed class DesktopHost : Form
         finally { checking = false; }
     }
 
-    private async Task SetPausedAsync(bool value)
+    private async Task SetPausedAsync(bool value, bool force = false)
     {
         await pauseGate.WaitAsync();
         try
         {
-            if (controller == null || paused == value) return;
+            if (controller == null || (!force && paused == value)) return;
             if (value)
             {
+                if (force) Core.Resume();
                 held = false;
                 await Core.ExecuteScriptAsync("window.meadowDesktop?.('up',0,0);window.meadowDesktop?.('visible',false);");
                 await ReadPageDiagnosticsAsync();

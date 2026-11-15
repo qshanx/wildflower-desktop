@@ -7,7 +7,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        VelopackApp.Build().Run();
+        VelopackApp.Build().SetAutoApplyOnStartup(false).Run();
         ApplicationConfiguration.Initialize();
         using var singleInstance = new Mutex(true, "Local\\WildflowerDesktop", out var first);
         if (!first) return;

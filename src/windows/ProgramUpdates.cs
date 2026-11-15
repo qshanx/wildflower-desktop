@@ -26,6 +26,10 @@ public sealed class ProgramUpdates
         });
     }
 
+    public string? PendingVersion => manager.IsInstalled
+        ? (downloaded ?? manager.UpdatePendingRestart)?.Version.ToString()
+        : null;
+
     public async Task<string?> DownloadAsync()
     {
         await gate.WaitAsync();
@@ -44,7 +48,7 @@ public sealed class ProgramUpdates
     // The host must stop input and successfully flush garden state before calling this.
     public void ApplyAndRestart()
     {
-        var target = downloaded ?? throw new InvalidOperationException("尚无已校验的软件更新。请先检查更新。");
+        var target = downloaded ?? (manager.IsInstalled ? manager.UpdatePendingRestart : null) ?? throw new InvalidOperationException("尚无已校验的软件更新。请先检查更新。");
         manager.ApplyUpdatesAndRestart(target);
     }
 }

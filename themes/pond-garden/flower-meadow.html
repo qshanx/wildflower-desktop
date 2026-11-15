@@ -112,21 +112,27 @@ const validFlower=f=>f&&Number.isInteger(f.kind)&&f.kind>=0&&f.kind<species.leng
 let data={flowers:[],vase:[],held:null,lanterns:[],settings:{effects:'soft',fast:false}};
 let storageReadable=true;
 try{
-  const saved=JSON.parse(localStorage.getItem(STORE));
-  if(saved){
+  const raw=localStorage.getItem(STORE),saved=JSON.parse(raw);
+  if(raw!==null){
+    if(!saved||typeof saved!=='object'||Array.isArray(saved)||!Array.isArray(saved.flowers)||!Array.isArray(saved.vase))throw new Error('Invalid garden save');
     data.flowers=Array.isArray(saved.flowers)?saved.flowers.filter(f=>validFlower(f)&&[f.x,f.y,f.at].every(Number.isFinite)&&f.x>=0&&f.x<=1&&f.y>=0&&f.y<=1&&[HOURS,DEMO].includes(f.duration)).slice(0,CAP):[];
     data.vase=Array.isArray(saved.vase)?saved.vase.filter(validFlower).slice(0,VASE_CAP):[];
     data.held=validFlower(saved.held)?saved.held:null;
     if(Array.isArray(saved.lanterns))data.lanterns=saved.lanterns.filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>.018&&p.x<.982&&p.y>.052&&p.y<.963).slice(0,LANTERN_CAP);
+    if(data.flowers.length!==saved.flowers.length||data.vase.length!==saved.vase.length||(saved.held!=null&&!data.held)||(saved.lanterns!=null&&(!Array.isArray(saved.lanterns)||data.lanterns.length!==saved.lanterns.length)))storageReadable=false;
     data.settings.effects=['still','soft','rich'].includes(saved.settings?.effects)?saved.settings.effects:'soft';
     data.settings.fast=saved.settings?.fast===true;
   }
 }catch{storageReadable=false;}
 let renderedFrames=0;
+const diagnosticsEnabled=new URLSearchParams(location.search).get("diagnostics")==="1";
 let W,H,tool=0,plantingMode=false,drawing=null,previous=null,frame=0,ambient=0,stageTimer=0,statusTimer=0,particles=[],visible=true,tourStart=null,carriedFly=null;
 const visibleFlies=[], capturedFlies=new Set();
 let wasNight=false;
 const wild=[];
+const background=new Image();
+background.onload=()=>requestDraw();
+background.src='pond-botanical.webp';
 const botanical=new Image();
 botanical.src='pond-botanical-atlas.webp';
 botanical.onload=()=>requestDraw();
@@ -376,8 +382,9 @@ function info(message){
   const s=$('status');s.textContent=message;clearTimeout(statusTimer);statusTimer=setTimeout(()=>s.textContent='',2800);
 }
 function persist(){
-  try{localStorage.setItem(STORE,JSON.stringify(data));}
-  catch{info('本地存储不可用。本次种植仍可继续。');}
+  if(!storageReadable){info('旧存档无法读取，已保留原文件。当前种植暂不保存。');return false;}
+  try{localStorage.setItem(STORE,JSON.stringify(data));return true;}
+  catch{info('本地存储不可用。本次种植仍可继续。');return false;}
 }
 function stage(f,now){
   return Math.min(3, Math.max(0, Math.floor((now-f.at)*3/f.duration)));
@@ -414,8 +421,6 @@ function botanicalSprite(tile,x,y,z,angle,flip){
   c.restore();
 }
 function draw(t){
-  renderedFrames++;
-  if(new URLSearchParams(location.search).get("diagnostics")==="1")window.chrome?.webview?.postMessage({type:"frame",frameCount:renderedFrames});
   frame=0;c.clearRect(0,0,W,H);
   const now=Date.now(), z=scale();
   if(tourStart!==null && now-tourStart>=TOUR_MS){tourStart=null;syncTour();}
@@ -464,6 +469,8 @@ function draw(t){
     }
     c.globalAlpha=1;
   }
+  renderedFrames++;
+  if(diagnosticsEnabled)window.chrome?.webview?.postMessage({type:"frame",frameCount:renderedFrames});
   nextAmbient(animated||particles.length>0,now);
 }
 function burst(x,y,kind){
@@ -577,7 +584,7 @@ function finish(id){
   drawing=null;previous=null;persist();scheduleGrowth();
 }
 makeAtlas();gatherWildflowers();sync();
-if(!storageReadable)info('未能读取旧存档。当前可继续种植。');
+if(!storageReadable)info('旧存档无法读取，已保留原文件。当前种植暂不保存。');
 field.addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
   begin(e.pointerId,e.clientX,e.clientY);
@@ -617,7 +624,7 @@ effects.value=data.settings.effects;fast.checked=data.settings.fast;
 effects.onchange=()=>{data.settings.effects=effects.value;particles=[];persist();requestDraw();};
 fast.onchange=()=>{data.settings.fast=fast.checked;persist();info(fast.checked?'之后播的种子约 6 秒开花。':'之后播的种子约 5 小时开花。');};
 window.meadowDesktop=(action,x,y)=>{
-  if(action==='flush'){finish();persist();return localStorage.getItem(STORE)===JSON.stringify(data);}
+  if(action==='flush'){finish();return persist();}
   if(action==='tour'){toggleTour();return;}
   if(action==='visible'){onVisibility(x);return;}
   if(action==='wallpaper'){finish();plantingMode=false;showSeeds(false);document.body.classList.toggle('wallpaper',Boolean(x));sync();$('options').hidden=true;$('settings').setAttribute('aria-expanded','false');$('settings').hidden=Boolean(x);return;}
@@ -638,7 +645,7 @@ window.meadowDesktop=(action,x,y)=>{
   }else if(action==='drag')move('desktop',x,y);
   else if(action==='up')finish('desktop');
 };
-window.meadowDiagnostics=()=>({ready:renderedFrames>0,frameCount:renderedFrames,flowerCount:data.flowers.length,width:W,height:H,visible,plantingMode,selected:tool,message:$('status').textContent});
+window.meadowDiagnostics=()=>({ready:renderedFrames>0&&background.naturalWidth>0&&botanical.naturalWidth>0,frameCount:renderedFrames,flowerCount:data.flowers.length,width:W,height:H,visible,plantingMode,selected:tool,message:$('status').textContent});
 window.livelyWallpaperPlaybackChanged=payload=>{
   try {
     const status=typeof payload==='string'?JSON.parse(payload):payload;

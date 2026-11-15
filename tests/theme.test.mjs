@@ -53,5 +53,25 @@ test('desktop seed path, feedback, pause, and reload persistence', async () => {
     await page.reload();
     await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
     assert.equal(await page.evaluate(() => meadowDiagnostics().flowerCount),1,'reload preserves flower');
+    await page.evaluate(() => localStorage.setItem('pond-garden-v2','broken prior garden'));
+    await page.reload();
+    await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
+    assert.equal(await page.evaluate(() => meadowDesktop('flush')),false,'unreadable garden prevents a successful update flush');
+    assert.equal(await page.evaluate(() => localStorage.getItem('pond-garden-v2')),'broken prior garden','unreadable save must not be overwritten');
+    await page.evaluate(() => localStorage.setItem('pond-garden-v2','{"flowers":"damaged"}'));
+    await page.reload();
+    await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
+    assert.equal(await page.evaluate(() => meadowDesktop('flush')),false,'invalid save structure prevents replacement');
+    assert.equal(await page.evaluate(() => localStorage.getItem('pond-garden-v2')),'{"flowers":"damaged"}');
+    const damagedFlower=JSON.stringify({flowers:[{id:'prior-flower',kind:1,x:.2,y:.7,at:1,duration:'damaged'}],vase:[],held:null});
+    await page.evaluate(raw=>localStorage.setItem('pond-garden-v2',raw),damagedFlower);
+    await page.reload();
+    await page.waitForFunction(() => window.meadowDiagnostics?.().ready);
+    assert.equal(await page.evaluate(() => meadowDesktop('flush')),false,'invalid flower must not silently disappear from the saved garden');
+    assert.equal(await page.evaluate(() => localStorage.getItem('pond-garden-v2')),damagedFlower);
+    await page.route('**/pond-botanical-atlas.webp',route=>route.fulfill({body:'invalid image',contentType:'image/webp'}));
+    await page.reload();
+    await page.waitForFunction(() => window.meadowDiagnostics?.().frameCount>0);
+    assert.equal(await page.evaluate(() => meadowDiagnostics().ready),false,'undecodable theme image must prevent activation');
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 });

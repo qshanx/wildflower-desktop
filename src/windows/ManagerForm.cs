@@ -34,7 +34,7 @@ internal sealed class ManagerForm : Form
         panel.Controls.Add(actions); panel.Controls.Add(automatic); panel.Controls.Add(install); panel.Controls.Add(status);
         Controls.Add(panel);
         try { if (File.Exists(settingsPath)) { var saved = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(settingsPath)); automatic.Checked = saved?.AutomaticUpdates ?? true; restoreDesktop = saved?.DesktopApplied ?? false; } }
-        catch (Exception) { status.Text = "设置未能读取，可以继续使用主题。"; }
+        catch (Exception) { automatic.Checked = false; status.Text = "设置未能读取，自动更新已暂停，可以继续使用主题。"; }
         automatic.CheckedChanged += (_, _) =>
         {
             try { SaveSettings(); }
@@ -59,6 +59,17 @@ internal sealed class ManagerForm : Form
         idleUpdateTimer.Start();
         Shown += async (_, _) =>
         {
+            await RunAsync(() =>
+            {
+                programReady = updates.PendingVersion != null;
+                install.Enabled = programReady;
+                if (programReady)
+                {
+                    status.Text = "程序更新已下载，可点击安装。";
+                    if (automatic.Checked && !emptyHost) updates.ApplyAndRestart();
+                }
+                return Task.CompletedTask;
+            });
             if (restoreDesktop) await RunAsync(() => ShowThemeAsync(true));
             if (automatic.Checked) await RunAsync(() => CheckUpdatesAsync(true));
         };

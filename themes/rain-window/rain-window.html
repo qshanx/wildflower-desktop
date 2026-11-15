@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>雨夜窗台</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101a2a}
+body{background:#101a2a url(window.jpg) center/cover no-repeat}
+canvas{display:block;width:100%;height:100%;position:absolute;inset:0}
+#fog{pointer-events:none}
+</style>
+<canvas aria-label="雨夜窗台，点玻璃散开一圈水珠"></canvas>
+<script>
+const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
+const background=new Image(), reduced=matchMedia('(prefers-reduced-motion: reduce)');
+const options=new URLSearchParams(location.search);
+const report=options.has('diagnostics'), pink=options.has('pink');
+const fog=pink?document.createElement('canvas'):null, mist=fog?.getContext('2d');
+if(fog){fog.id='fog';fog.setAttribute('aria-hidden','true');document.body.insertBefore(fog,canvas);}
+const mistLife=5200;
+let wipes=[], press=null, mistTime=-Infinity;
+const drops=Array.from({length:95},()=>({x:Math.random(),y:Math.random(),s:.19+Math.random()*.57,l:.013+Math.random()*.042,a:.13+Math.random()*.32}));
+const beads=Array.from({length:24},()=>({x:Math.random(),y:Math.random(),r:1.8+Math.random()*3.4,speed:0,wait:Math.random()*5,trail:0}));
+let w,h,frame=0,last=-Infinity,raf=0,visible=true,wallpaper=false,ripples=[];
+function glass(){
+  const scale=Math.max(w/background.naturalWidth,h/background.naturalHeight);
+  const bw=background.naturalWidth*scale,bh=background.naturalHeight*scale;
+  return {x:(w-bw)/2+bw*(pink?.04:.057),y:(h-bh)/2,width:bw*(pink?.922:.872),height:bh*.864};
+}
+function resize(){
+  w=innerWidth;h=innerHeight;
+  const scale=Math.min(devicePixelRatio||1,Math.sqrt(921600/Math.max(1,w*h)));
+  canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
+  ctx.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);
+  if(fog){
+    fog.width=canvas.width;fog.height=canvas.height;
+    mist.setTransform(fog.width/w,0,0,fog.height/h,0,0);
+    wipes=[];press=null;mistTime=-Infinity;
+  }
+  schedule();
+}
+function schedule(){
+  if(!raf && visible && !document.hidden && background.naturalWidth) raf=requestAnimationFrame(draw);
+}
+function pause(){
+  cancelAnimationFrame(raf);raf=0;last=-Infinity;
+  press=null;
+}
+function clipGlass(layer,g){
+  layer.beginPath();layer.rect(g.x,g.y,g.width,g.height);
+  if(pink)layer.rect(g.x+g.width*.88,g.y+g.height*.69,g.width*.12,g.height*.31);
+  layer.clip('evenodd');
+}
+function paintMist(now,g){
+  if(!mist || (now===mistTime || (now-mistTime<75 && !press)))return;
+  if(!wipes.length&&Number.isFinite(mistTime))return;
+  mistTime=now;
+  wipes=wipes.filter(p=>now-p.at<mistLife);
+  mist.clearRect(0,0,w,h);
+  mist.save();clipGlass(mist,g);
+  mist.fillStyle='rgba(255,222,229,.27)';
+  mist.fillRect(g.x,g.y,g.width,g.height);
+  mist.globalCompositeOperation='destination-out';
+  for(const p of wipes){
+    const age=Math.max(0,now-p.at);
+    const alpha=1-Math.max(0,age-700)/(mistLife-700);
+    const brush=mist.createRadialGradient(p.x,p.y,8,p.x,p.y,38);
+    brush.addColorStop(0,'rgba(0,0,0,'+alpha+')');
+    brush.addColorStop(.55,'rgba(0,0,0,'+(alpha*.8)+')');
+    brush.addColorStop(1,'transparent');
+    mist.fillStyle=brush;
+    mist.fillRect(p.x-38,p.y-38,76,76);
+  }
+  mist.restore();
+}
+function draw(now){
+  raf=0;
+  if(!visible||document.hidden)return;
+  if(!reduced.matches && now-last<32){schedule();return;}
+  const dt=Number.isFinite(last)?Math.min((now-last)/1000,.075):0;
+  last=now;
+  ctx.clearRect(0,0,w,h);
+  const g=glass();
+  paintMist(now,g);
+  ctx.save();
+  clipGlass(ctx,g);
+  ctx.lineWidth=1;
+  for(const d of drops){
+    if(!reduced.matches){d.y+=d.s*dt;if(d.y>1.06){d.y=0;d.x=Math.random();}}
+    const x=g.x+d.x*g.width,y=g.y+d.y*g.height;
+    ctx.strokeStyle=(pink?'rgba(255,226,222,':'rgba(161,199,223,')+d.a+')';
+    ctx.beginPath();ctx.moveTo(x-6,y-d.l*g.height);ctx.lineTo(x,y);ctx.stroke();
+  }
+  for(const b of beads){
+    if(!reduced.matches){
+      b.wait-=dt;
+      if(b.wait<=0){
+        b.speed=Math.min(.28,b.speed+dt*.16);
+        b.y+=b.speed*dt;
+        b.trail=Math.min(38,b.trail+b.speed*dt*g.height);
+      }
+      if(b.y>1.015){b.y=.02;b.x=Math.random();b.wait=1+Math.random()*5;b.speed=0;b.trail=0;}
+    }
+    const x=g.x+b.x*g.width,y=g.y+b.y*g.height,r=b.r;
+    if(b.trail>0){
+      ctx.strokeStyle='rgba(151,198,224,.19)';
+      ctx.beginPath();ctx.moveTo(x-1,y-b.trail);ctx.lineTo(x,y);ctx.stroke();
+    }
+    ctx.fillStyle='rgba(6,18,31,.68)';
+    ctx.beginPath();ctx.ellipse(x,y,r,r*1.36,.12,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(202,230,245,.72)';
+    ctx.beginPath();ctx.ellipse(x,y,r*.76,r*1.05,.12,Math.PI*.84,Math.PI*1.49);ctx.stroke();
+    ctx.fillStyle='rgba(193,222,241,.51)';
+    ctx.fillRect(x+r*.28,y+r*.6,1.4,1.4);
+  }
+  ripples=ripples.filter(r=>now-r.at<650);
+  for(const r of ripples){
+    const t=Math.max(0,(now-r.at)/650);
+    ctx.strokeStyle='rgba(201,225,241,'+(.6*(1-t))+')';
+    ctx.beginPath();ctx.ellipse(r.x,r.y,4+t*30,3+t*17,0,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<7;i++){
+      const a=i*Math.PI*2/7;
+      ctx.fillStyle='rgba(207,230,245,'+(.65*(1-t))+')';
+      ctx.fillRect(r.x+Math.cos(a)*t*48,r.y+Math.sin(a)*t*27+t*t*18,2,3);
+    }
+  }
+  ctx.restore();
+  frame++;
+  if(report)window.chrome?.webview?.postMessage({type:'frame',frameCount:frame});
+  if(!reduced.matches)schedule();
+}
+function inGlass(x,y){
+  if(!visible||document.hidden||reduced.matches||!background.naturalWidth)return false;
+  const g=glass();
+  if(x<g.x||x>g.x+g.width||y<g.y||y>g.y+g.height)return false;
+  if(pink&&x>=g.x+g.width*.88&&y>=g.y+g.height*.69)return false;
+  return true;
+}
+function splash(x,y){
+  if(!inGlass(x,y))return false;
+  ripples=ripples.slice(-7);
+  ripples.push({x,y,at:performance.now()});
+  schedule();return true;
+}
+function down(x,y){
+  if(!pink)return splash(x,y);
+  press=inGlass(x,y)?{x,y,dragged:false}:null;
+  return Boolean(press);
+}
+function drag(x,y){
+  if(!press)return false;
+  if(!inGlass(x,y)){press=null;return false;}
+  const distance=Math.hypot(x-press.x,y-press.y);
+  if(distance<(press.dragged?3:8))return false;
+  const steps=Math.ceil(distance/16), at=performance.now();
+  for(let i=0;i<=steps;i++)wipes.push({x:press.x+(x-press.x)*i/steps,y:press.y+(y-press.y)*i/steps,at});
+  wipes=wipes.slice(-220);
+  press={x,y,dragged:true};
+  schedule();return true;
+}
+function up(click){
+  if(click&&press&&!press.dragged)splash(press.x,press.y);
+  press=null;
+}
+window.meadowDesktop=(action,x,y)=>{
+  if(action==='flush'){up(false);return true;}
+  if(action==='wallpaper'){wallpaper=!!x;return true;}
+  if(action==='visible'){visible=!!x;if(visible)schedule();else pause();return true;}
+  if(action==='windowsDown')return down(x,y);
+  if(action==='drag')return drag(x,y);
+  if(action==='up'){up(true);return true;}
+  if(action==='cancel'){up(false);return true;}
+  return false;
+};
+window.meadowDiagnostics=()=>({ready:frame>0&&background.naturalWidth>0,frameCount:frame,flowerCount:0,width:w,height:h,visible,plantingMode:!!press,splashCount:ripples.length,wipeCount:wipes.length});
+canvas.addEventListener('pointerdown',e=>{if(!wallpaper&&e.button===0&&down(e.clientX,e.clientY)&&pink)canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!wallpaper&&e.buttons&1)drag(e.clientX,e.clientY);});
+canvas.addEventListener('pointerup',e=>{if(!wallpaper&&e.button===0)up(true);});
+canvas.addEventListener('pointercancel',()=>up(false));
+addEventListener('resize',resize);
+document.addEventListener('visibilitychange',()=>document.hidden?pause():schedule());
+reduced.addEventListener('change',()=>{pause();ripples=[];wipes=[];mistTime=-Infinity;schedule();});
+background.onload=schedule;
+background.src=pink?'pink-window.jpg':'window.jpg';
+if(pink){document.title='粉暮窗台';document.body.style.backgroundImage='url(pink-window.jpg)';}
+resize();
+</script>
+</html>

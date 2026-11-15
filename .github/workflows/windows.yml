@@ -57,7 +57,7 @@ jobs:
         run: |
           dotnet tool install --global vpk --version 1.2.161
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          vpk pack --packId WildflowerDesktop --packTitle "野花原" --packVersion $env:RELEASE_VERSION --packDir artifacts/publish/${{ matrix.arch }} --mainExe WildflowerDesktop.exe --runtime win-${{ matrix.arch }} --channel win-${{ matrix.arch }} --framework webview2 --outputDir artifacts/releases/${{ matrix.arch }}
+          vpk pack --packId WildflowerDesktop --packTitle "窗外" --icon src/windows/Assets/outside.ico --packVersion $env:RELEASE_VERSION --packDir artifacts/publish/${{ matrix.arch }} --mainExe WildflowerDesktop.exe --runtime win-${{ matrix.arch }} --channel win-${{ matrix.arch }} --framework webview2 --outputDir artifacts/releases/${{ matrix.arch }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:

@@ -6,7 +6,7 @@ namespace WildflowerDesktop;
 
 internal sealed class DesktopHost : Form
 {
-    internal const string Origin = "https://pond.wildflower.local";
+    private string themeHost = "pond.wildflower.local";
     internal static readonly string DataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WildflowerDesktopData");
     private CoreWebView2Environment? environment;
     private CoreWebView2Controller? controller;
@@ -18,11 +18,14 @@ internal sealed class DesktopHost : Form
     private readonly System.Windows.Forms.Timer diagnosticsTimer = new() { Interval = 2000 };
     private readonly bool desktop, diagnostics, emptyHost;
     private bool paused, checking, held, ready, closing;
+    private bool rendererUnavailable;
+    private bool pinkGlass;
     private JsonElement? lastPage;
     private long frameEvents, reportedFrameCount;
     private DateTime? lastFrameUtc;
     internal bool IsDesktop => desktop;
     internal bool IsPaused => paused;
+    internal bool CanFlush => !rendererUnavailable && !closing;
     internal bool CanActivateUpdate => desktop && ready && paused && !held && lastPage is { } page
         && page.ValueKind == JsonValueKind.Object && page.TryGetProperty("plantingMode", out var planting)
         && planting.ValueKind == JsonValueKind.False;
@@ -36,7 +39,7 @@ internal sealed class DesktopHost : Form
     internal DesktopHost(bool desktop, bool diagnostics, bool emptyHost)
     {
         this.desktop = desktop; this.diagnostics = diagnostics; this.emptyHost = diagnostics && emptyHost;
-        Text = "野花原 · 主题预览";
+        Text = "窗外 · 主题预览";
         BackColor = Color.FromArgb(27, 54, 40);
         ShowInTaskbar = !desktop;
         if (desktop) { FormBorderStyle = FormBorderStyle.None; Bounds = Screen.PrimaryScreen!.Bounds; }
@@ -58,13 +61,26 @@ internal sealed class DesktopHost : Form
         });
     }
 
-    internal async Task LoadThemeAsync(string directory)
+    internal async Task LoadThemeAsync(string directory, WallpaperTheme theme)
     {
+        var rain = theme != WallpaperTheme.Pond && !emptyHost;
+        pinkGlass = rain && theme == WallpaperTheme.PinkRain;
+        if (rain) themeHost = theme == WallpaperTheme.PinkRain ? "pink-rain.wildflower.local" : "rain.wildflower.local";
         if (desktop) { shell.Connect(); _ = Handle; shell.Attach(this); }
         Show();
         if (desktop) Native.EnableWindow(Handle, false);
         environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(DataDirectory, "WebView2"));
-        controller = await environment.CreateCoreWebView2ControllerAsync(Handle);
+        if (closing) return;
+        CoreWebView2Controller created;
+        if (desktop) created = await environment.CreateCoreWebView2ControllerAsync(Handle);
+        else
+        {
+            var profile = environment.CreateCoreWebView2ControllerOptions();
+            profile.IsInPrivateModeEnabled = true;
+            created = await environment.CreateCoreWebView2ControllerAsync(Handle, profile);
+        }
+        if (closing) { created.Close(); return; }
+        controller = created;
         controller.Bounds = ClientRectangle;
         controller.IsVisible = true;
         controller.DefaultBackgroundColor = Color.FromArgb(27, 54, 40);
@@ -98,16 +114,23 @@ internal sealed class DesktopHost : Form
             }
             catch (Exception) { }
         };
-        Core.ProcessFailed += (_, _) => { ready = false; mouse?.Dispose(); HostFailed?.Invoke("主题渲染进程已停止，请重新应用主题。"); };
-        await NavigateAsync(directory);
+        Core.ProcessFailed += (_, e) =>
+        {
+            if (closing || e.ProcessFailedKind is not (CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited)) return;
+            rendererUnavailable = true;
+            ready = false;
+            mouse?.Dispose();
+            HostFailed?.Invoke("主题渲染进程已停止，请重新应用主题。");
+        };
+        await NavigateAsync(directory, rain ? "rain-window.html" : "flower-meadow.html", rain && theme == WallpaperTheme.PinkRain);
         if (desktop) mouse = new DesktopMouse(this, OnMouse);
         visibilityTimer.Start();
         if (diagnostics) { diagnosticsTimer.Start(); await WriteDiagnosticsAsync(); }
     }
 
-    private static bool Allowed(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == "https" && u.Host == "pond.wildflower.local" && u.IsDefaultPort;
+    private bool Allowed(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == "https" && u.Host == themeHost && u.IsDefaultPort;
 
-    internal async Task NavigateAsync(string directory)
+    private async Task NavigateAsync(string directory, string entry, bool pink)
     {
         ready = false;
         await SetPausedAsync(false);
@@ -126,13 +149,13 @@ internal sealed class DesktopHost : Form
                 </script>
                 """);
         }
-        Core.SetVirtualHostNameToFolderMapping("pond.wildflower.local", directory, CoreWebView2HostResourceAccessKind.DenyCors);
+        Core.SetVirtualHostNameToFolderMapping(themeHost, directory, CoreWebView2HostResourceAccessKind.DenyCors);
         var completed = new TaskCompletionSource<bool>();
         void Finished(object? sender, CoreWebView2NavigationCompletedEventArgs e) => completed.TrySetResult(e.IsSuccess);
         Core.NavigationCompleted += Finished;
         try
         {
-            Core.Navigate(Origin + "/flower-meadow.html?host=windows" + (emptyHost ? "&emptyHost=1" : "") + (diagnostics ? "&diagnostics=1" : ""));
+            Core.Navigate($"https://{themeHost}/{entry}?host=windows" + (pink ? "&pink=1" : "") + (emptyHost ? "&emptyHost=1" : "") + (diagnostics ? "&diagnostics=1" : ""));
             if (!await completed.Task.WaitAsync(TimeSpan.FromSeconds(20))) throw new InvalidOperationException("主题页面加载失败。");
             await Core.ExecuteScriptAsync($"window.meadowDesktop?.('wallpaper',{(desktop ? "true" : "false")});");
             var deadline = DateTime.UtcNow.AddSeconds(15);
@@ -153,36 +176,11 @@ internal sealed class DesktopHost : Form
     internal async Task FlushAsync()
     {
         held = false;
-        if (controller == null) return;
+        if (!CanFlush || controller == null)
+            throw new InvalidOperationException("渲染窗口已失效，无法确认存档。请重新应用主题后再更新。");
         await SetPausedAsync(false);
         var flushed = await Core.ExecuteScriptAsync("window.meadowDesktop?.('flush') === true");
         if (flushed != "true") throw new InvalidOperationException("花园存档未能确认保存，已取消本次更新或切换。");
-    }
-
-    internal async Task PauseForSwitchAsync()
-    {
-        var wasReady = ready;
-        var wasPaused = paused;
-        try
-        {
-            await FlushAsync();
-            ready = false;
-            await SetPausedAsync(true);
-        }
-        catch (Exception failure)
-        {
-            ready = false;
-            try
-            {
-                await SetPausedAsync(wasPaused, force: true);
-                ready = wasReady;
-            }
-            catch (Exception recoveryFailure)
-            {
-                throw new InvalidOperationException("更新已取消，但主题恢复失败，请重新应用主题。", new AggregateException(failure, recoveryFailure));
-            }
-            throw;
-        }
     }
 
     private bool desktopHover;
@@ -199,7 +197,7 @@ internal sealed class DesktopHost : Form
             }
             if (!shell.IsEmptyDesktop(point) || !Native.ScreenToClient(Handle, ref point) || !ClientRectangle.Contains(point.X, point.Y))
             {
-                if (held) { held = false; await Core.ExecuteScriptAsync("window.meadowDesktop('up',0,0)"); }
+                if (held) { held = false; await Core.ExecuteScriptAsync(pinkGlass ? "window.meadowDesktop('cancel')" : "window.meadowDesktop('up',0,0)"); }
                 if (desktopHover)
                 {
                     desktopHover = false;
@@ -232,22 +230,30 @@ internal sealed class DesktopHost : Form
             var covered = desktop ? DesktopShell.FullyCovered(Screen.PrimaryScreen!.WorkingArea, Handle) : WindowState == FormWindowState.Minimized || !Visible;
             await SetPausedAsync(covered);
         }
-        catch (Exception ex) { HostFailed?.Invoke("暂停检测失败：" + ex.Message); }
+        catch (InvalidOperationException ex) when (!closing)
+        {
+            rendererUnavailable = true;
+            ready = false;
+            mouse?.Dispose();
+            HostFailed?.Invoke("渲染窗口已失效，请重新应用主题：" + ex.Message);
+        }
+        catch (Exception ex) { if (!closing) HostFailed?.Invoke("暂停检测失败：" + ex.Message); }
         finally { checking = false; }
     }
 
-    private async Task SetPausedAsync(bool value, bool force = false)
+    private async Task SetPausedAsync(bool value)
     {
         await pauseGate.WaitAsync();
         try
         {
-            if (controller == null || (!force && paused == value)) return;
+            if (closing || controller == null || paused == value) return;
             if (value)
             {
-                if (force) Core.Resume();
                 held = false;
                 await Core.ExecuteScriptAsync("window.meadowDesktop?.('up',0,0);window.meadowDesktop?.('visible',false);");
+                if (closing) return;
                 await ReadPageDiagnosticsAsync();
+                if (closing) return;
                 controller.IsVisible = false;
                 paused = true;
                 await Core.TrySuspendAsync();

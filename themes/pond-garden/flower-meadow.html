@@ -380,6 +380,7 @@ function nextAmbient(animated,now){
 function toggleTour(){
   tourStart=tourStart===null?Date.now():null;
   syncTour();requestDraw();
+  info(tourStart===null?'已恢复本地时间。':'现在播种，约 6 秒开花。接着看池塘入夜。');
 }
 function syncTour(){
   $('tour').setAttribute('aria-pressed',String(tourStart!==null));
@@ -488,6 +489,43 @@ function botanicalSprite(tile,x,y,z,angle,flip){
   const w=83*z;
   c.drawImage(botanical,(tile%4)*128,Math.floor(tile/4)*128,128,128,-w*.5,-w*.96,w,w);
   c.restore();
+}
+function drawPlant(p,now,z,animated){
+  const {f,lean,flip,tile}=p,phase=stage(f,now),size=z*p.size;
+  const x=p.x*W,y=p.y*H;
+  if(!botanical.naturalWidth||(!animated&&phase<3)){
+    sprite(f,phase,x,y,size*1.42,lean);return;
+  }
+  const age=clamp((now-f.at)/f.duration);
+  const sprout=smooth((age-.1)/.66), bloom=smooth((age-.51)/.49);
+  if(bloom<1){
+    c.save();c.translate(x,y);c.rotate(lean*sprout);
+    c.globalAlpha=1-smooth((age-.12)/.26);
+    oval(c,0,1,6*size,3.2*size,-.26,'#4b3d25');
+    oval(c,-.8,-.7,4.4*size,2.1*size,-.26,'#dcbc7c');
+    if(sprout>0){
+      const height=57*size*sprout;
+      c.globalAlpha=smooth(sprout*4)*(1-bloom);
+      c.lineWidth=2.9*size;c.strokeStyle='#94ac54';
+      c.beginPath();c.moveTo(0,0);c.quadraticCurveTo(-3*size,-height*.52,0,-height);c.stroke();
+      oval(c,-5*size*sprout,-height*.44,8*size*sprout,3*size*sprout,.65,'#829f4c');
+      oval(c,5*size*sprout,-height*.64,8*size*sprout,2.7*size*sprout,-.55,'#a8bb66');
+      const bud=smooth((age-.30)/.32)*size;
+      if(bud>0){
+        oval(c,0,-height,5*bud,7*bud,.1,'#728e45');
+        if(age>.48)oval(c,0,-height-3*bud,3.8*bud,4*bud,.1,species[f.kind].color);
+      }
+    }
+    c.restore();
+  }
+  if(bloom>0){
+    c.globalAlpha=bloom;
+    oval(c,x,y+size,13*size,4*size,0,'rgba(22,40,20,.27)');
+    botanicalSprite(tile,x,y,size*(.61+.39*bloom),lean,flip);
+    c.globalAlpha=bloom*.78;
+    botanicalSprite(11,x+size*4,y+size*3,size*.46,-lean,flip);
+    c.globalAlpha=1;
+  }
 }
 function nearestBank(x,y){
   let best, distance=Infinity;
@@ -629,14 +667,7 @@ function draw(t){
     }
     c.globalAlpha=1;
   }
-  for(const p of gardenLayout()){
-    const {f,lean,flip,tile}=p,phase=stage(f,now),x=p.x*W,y=p.y*H,size=z*p.size;
-    if(phase===3&&botanical.naturalWidth){
-      oval(c,x,y+size,13*size,4*size,0,'rgba(22,40,20,.27)');
-      botanicalSprite(tile,x,y,size,lean,flip);
-      c.globalAlpha=.78;botanicalSprite(11,x+size*4,y+size*3,size*.46,-lean,flip);c.globalAlpha=1;
-    }else sprite(f,phase,x,y,size*1.42,lean);
-  }
+  for(const p of gardenLayout())drawPlant(p,now,z,animated);
   arrangement(t,z);
   paintLight(t,h,animated,rich);
   particles=particles.filter(p=>t-p.t<700);
@@ -671,7 +702,7 @@ function sow(x,y,feedback){
     if(feedback&&plantingMode)info('这里已经播种，试试旁边的草地。');
     return;
   }
-  data.flowers.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,9),kind:tool,x:u,y:v,at:Date.now(),duration:data.settings.fast?DEMO:HOURS});
+  data.flowers.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,9),kind:tool,x:u,y:v,at:Date.now(),duration:(data.settings.fast||tourStart!==null)?DEMO:HOURS});
   burst(x,y,tool);requestDraw();
   if(feedback&&plantingMode)info('已种下'+species[tool].name+'。');
 }

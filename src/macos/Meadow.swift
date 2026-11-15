@@ -1,5 +1,8 @@
 import AppKit
 import WebKit
+#if canImport(Sparkle)
+import Sparkle
+#endif
 
 final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate {
     let preview = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 690),
@@ -16,6 +19,17 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
     var desktopHover = false
     var lastDrag: TimeInterval = 0
     var checkingReload = false
+#if canImport(Sparkle)
+    var updateController: SPUStandardUpdaterController?
+
+    @objc func toggleAutomaticUpdates(_ item: NSMenuItem) {
+        guard let updater = updateController?.updater else { return }
+        let enabled = !updater.automaticallyChecksForUpdates
+        updater.automaticallyChecksForUpdates = enabled
+        updater.automaticallyDownloadsUpdates = enabled
+        item.state = enabled ? .on : .off
+    }
+#endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let page = Bundle.main.url(forResource: "flower-meadow", withExtension: "html") else {
@@ -25,24 +39,47 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
         let smoke = ProcessInfo.processInfo.arguments.contains("--smoke")
         checkingReload = ProcessInfo.processInfo.arguments.contains("--restore")
         tray = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        tray.button?.image = NSImage(systemSymbolName: "leaf", accessibilityDescription: "野花原")
+        tray.button?.image = NSImage(systemSymbolName: "leaf", accessibilityDescription: "窗外")
         let menu = NSMenu()
         for (title, selector, shortcut) in [
             ("打开试玩窗口", #selector(showPreview), ""),
-            ("挂到桌面（试验）", #selector(toggleDesktop), ""),
+            ("应用到桌面", #selector(toggleDesktop), ""),
             ("预览一天 · 45 秒", #selector(previewDay), ""),
-            ("退出野花原", #selector(quit), "q")
+            ("退出窗外", #selector(quit), "q")
         ] {
             let item = menu.addItem(withTitle: title, action: selector, keyEquivalent: shortcut)
             item.target = self
             if selector == #selector(toggleDesktop) { desktopItem = item }
         }
-        tray.button?.toolTip = "野花原 · 左键打开种子篮，选种后左键种花"
+        tray.button?.toolTip = "窗外 · 左键打开种子篮，选种后左键种花"
+#if canImport(Sparkle)
+        if !smoke && !checkingReload {
+            let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            updateController = controller
+            menu.insertItem(.separator(), at: menu.items.count - 1)
+            let check = NSMenuItem(title: "检查程序更新…", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+            check.target = controller
+            menu.insertItem(check, at: menu.items.count - 1)
+            let automatic = NSMenuItem(title: "自动检查并下载程序更新", action: #selector(toggleAutomaticUpdates(_:)), keyEquivalent: "")
+            automatic.target = self
+            automatic.state = controller.updater.automaticallyChecksForUpdates ? .on : .off
+            menu.insertItem(automatic, at: menu.items.count - 1)
+        }
+#endif
         tray.menu = menu
-        preview.title = "野花原 · 互动壁纸"
+        preview.title = "窗外 · 互动壁纸"
         preview.minSize = NSSize(width: 360, height: 280)
         preview.isReleasedWhenClosed = false
         preview.delegate = self
+        let applyButton = NSButton(title: "应用到桌面", target: self, action: #selector(toggleDesktop))
+        applyButton.bezelStyle = .rounded
+        applyButton.sizeToFit()
+        let applyControl = NSTitlebarAccessoryViewController()
+        applyControl.layoutAttribute = .right
+        applyControl.view = NSView(frame: NSRect(origin: .zero, size: NSSize(
+            width: applyButton.frame.width + 16, height: applyButton.frame.height)))
+        applyControl.view.addSubview(applyButton)
+        preview.addTitlebarAccessoryViewController(applyControl)
         preview.center()
         desktop.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) - 1)
         desktop.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -50,7 +87,12 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
         desktop.hasShadow = false
         desktop.isReleasedWhenClosed = false
         if smoke || checkingReload || ProcessInfo.processInfo.arguments.contains("--desktop") || ProcessInfo.processInfo.arguments.contains("--light-check") { web.navigationDelegate = self }
-        showPreview()
+        if ProcessInfo.processInfo.arguments.contains("--update-probe") {
+            web.navigationDelegate = self
+            host(preview)
+        } else {
+            showPreview()
+        }
         web.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
     }
 
@@ -93,7 +135,7 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
         monitor = nil
         desktop.orderOut(nil)
         mounted = false
-        desktopItem.title = "挂到桌面（试验）"
+        desktopItem.title = "应用到桌面"
         action("wallpaper", 0)
     }
 
@@ -164,6 +206,13 @@ final class Meadow: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigat
     @objc func quit() { unmount(); NSApp.terminate(nil) }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if ProcessInfo.processInfo.arguments.contains("--update-probe") {
+            web.evaluateJavaScript("data.flowers.length") { value, _ in
+                print("Update probe loaded garden: \(value as? Int ?? -1) plants")
+                fflush(stdout)
+            }
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--desktop") {
             webView.navigationDelegate = nil
             toggleDesktop()

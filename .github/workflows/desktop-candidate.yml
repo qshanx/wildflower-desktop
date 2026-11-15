@@ -31,10 +31,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="$RUNNER_TEMP/野花原.app"
+          app="$RUNNER_TEMP/窗外.app"
           bash scripts/build-mac.sh "$app"
           mkdir -p artifacts/mac-preview
-          bash scripts/package-mac-dmg.sh "$app" "$PWD/artifacts/mac-preview/WildflowerDesktop-mac-${WILDFLOWER_MAC_VERSION}-preview.dmg" "野花原预览"
+          bash scripts/package-mac-dmg.sh "$app" "$PWD/artifacts/mac-preview/WildflowerDesktop-mac-${WILDFLOWER_MAC_VERSION}-preview.dmg" "窗外预览"
       - uses: actions/upload-artifact@v4
         with:
           name: mac-${{ inputs.version }}-preview

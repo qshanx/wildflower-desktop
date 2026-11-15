@@ -180,6 +180,34 @@ test('desktop seed path, feedback, pause, and reload persistence', async () => {
     await page.reload();
     await page.waitForFunction(()=>meadowDiagnostics().ready);
     assert.deepEqual((await save()).vase.at(-1),wildStem,'a wild stem survives reload');
+    await page.evaluate(()=>{meadowDesktop('wallpaper',1);meadowDesktop('tour');});
+    await desktopClick('#basket','plainDown');
+    await desktopClick('#rack button:first-child','plainDown');
+    await page.evaluate(()=>{meadowDesktop('plainDown',230,645);meadowDesktop('up');});
+    const fresh=(await save()).flowers.at(-1);
+    assert.equal(fresh.duration,6000,'tour speeds up only new seeds');
+    assert.ok((await save()).flowers.some(f=>f.duration===5*60*60*1000),'old seeds keep their normal clock');
+    const ages=await page.evaluate(fresh=>{
+      const p=gardenLayout().find(p=>p.f.id===fresh.id);
+      const x=Math.round(p.x*W),y=Math.round(p.y*H);
+      return [0,.45,.50,.80,1].map(age=>{
+        c.clearRect(0,0,W,H);
+        drawPlant(p,p.f.at+age*p.f.duration,scale(),true);
+        const pixels=c.getImageData(x-44,y-84,88,92).data;
+        let top=92,hash=0;
+        for(let n=3;n<pixels.length;n+=4)if(pixels[n]){
+          top=Math.min(top,Math.floor(n/352));hash=Math.imul(hash,31)+pixels[n]+n|0;
+        }
+        return {top,hash};
+      });
+    },fresh);
+    assert.ok(ages[0].top>ages[1].top&&ages[1].top>ages[2].top&&ages[2].top>ages[4].top,
+      'the plant grows taller across adjacent times within one stage');
+    assert.equal(new Set(ages.map(a=>a.hash)).size,ages.length);
+    await page.clock.setFixedTime(new Date(fresh.at+40_000));
+    assert.ok(await page.evaluate(()=>nightLevel(sceneHour(Date.now()))>.9),'the tour reaches night after bloom');
+    await page.evaluate(()=>meadowDesktop('tour'));
+    assert.ok(await page.evaluate(()=>nightLevel(sceneHour(Date.now()))<.1),'ending restores local daytime');
     await page.evaluate(() => localStorage.setItem('pond-garden-v2','broken prior garden'));
     await page.reload();
     await page.waitForFunction(() => window.meadowDiagnostics?.().ready);

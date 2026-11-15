@@ -1,0 +1,42 @@
+name: Desktop release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Application version (major.minor.patch)
+        required: true
+        type: string
+      mac_build:
+        description: Increasing Mac build number
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      version: ${{ inputs.version }}
+
+  mac-preview:
+    runs-on: macos-15
+    env:
+      WILDFLOWER_MAC_VERSION: ${{ inputs.version }}
+      WILDFLOWER_MAC_BUILD: ${{ inputs.mac_build }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Mac installation preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/野花原.app"
+          bash scripts/build-mac.sh "$app"
+          mkdir -p artifacts/mac-preview
+          bash scripts/package-mac-dmg.sh "$app" "$PWD/artifacts/mac-preview/WildflowerDesktop-mac-${WILDFLOWER_MAC_VERSION}-preview.dmg" "野花原预览"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ inputs.version }}-preview
+          path: artifacts/mac-preview/
+          if-no-files-found: error

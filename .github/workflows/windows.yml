@@ -3,6 +3,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Windows package version (major.minor.patch)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Windows package version (major.minor.patch)"
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -19,10 +30,13 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: dotnet run --project tests/ThemeStore.Tests
-      - run: node --test tests/theme.test.mjs
+      - run: node --test tests/*.test.mjs
   package:
+    if: inputs.version != ''
     needs: tests
     runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,17 +49,18 @@ jobs:
       - name: Publish host
         shell: pwsh
         run: |
-          dotnet publish src/windows/WildflowerDesktop.csproj -c Release -r win-${{ matrix.arch }} --self-contained true -o artifacts/publish/${{ matrix.arch }}
+          if ($env:RELEASE_VERSION -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z') { throw 'Expected major.minor.patch' }
+          dotnet publish src/windows/WildflowerDesktop.csproj -c Release -r win-${{ matrix.arch }} --self-contained true "-p:Version=$env:RELEASE_VERSION" -o artifacts/publish/${{ matrix.arch }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package installer and update channel
         shell: pwsh
         run: |
           dotnet tool install --global vpk --version 1.2.161
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          vpk pack --packId WildflowerDesktop --packTitle "野花原" --packVersion 0.1.0 --packDir artifacts/publish/${{ matrix.arch }} --mainExe WildflowerDesktop.exe --runtime win-${{ matrix.arch }} --channel win-${{ matrix.arch }} --framework webview2 --outputDir artifacts/releases/${{ matrix.arch }}
+          vpk pack --packId WildflowerDesktop --packTitle "野花原" --packVersion $env:RELEASE_VERSION --packDir artifacts/publish/${{ matrix.arch }} --mainExe WildflowerDesktop.exe --runtime win-${{ matrix.arch }} --channel win-${{ matrix.arch }} --framework webview2 --outputDir artifacts/releases/${{ matrix.arch }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.arch }}
+          name: windows-${{ inputs.version }}-${{ matrix.arch }}
           path: artifacts/releases/${{ matrix.arch }}/
           if-no-files-found: error

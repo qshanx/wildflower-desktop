@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+artifacts/
+.local/
+*.user
+*.log
+*.iso
+*.qcow2
+*.vhdx
+*.pfx
+*.pem
+.env*
+.DS_Store
+node_modules/

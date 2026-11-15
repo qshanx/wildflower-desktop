@@ -1,0 +1,51 @@
+name: Windows build and package
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: dotnet run --project tests/ThemeStore.Tests
+      - run: node --test tests/theme.test.mjs
+  package:
+    needs: tests
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish host
+        shell: pwsh
+        run: |
+          dotnet publish src/windows/WildflowerDesktop.csproj -c Release -r win-${{ matrix.arch }} --self-contained true -o artifacts/publish/${{ matrix.arch }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Package installer and update channel
+        shell: pwsh
+        run: |
+          dotnet tool install --global vpk --version 1.2.161
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          vpk pack --packId WildflowerDesktop --packTitle "野花原" --packVersion 0.1.0 --packDir artifacts/publish/${{ matrix.arch }} --mainExe WildflowerDesktop.exe --runtime win-${{ matrix.arch }} --channel win-${{ matrix.arch }} --framework webview2 --outputDir artifacts/releases/${{ matrix.arch }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: artifacts/releases/${{ matrix.arch }}/
+          if-no-files-found: error

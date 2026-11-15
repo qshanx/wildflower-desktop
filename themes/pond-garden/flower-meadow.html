@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>野花原 · 池塘花园</title>
+<style>
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden}
+  body{color:#fff8db;font:14px/1.5 system-ui,sans-serif;background:#4a6f42 url('pond-botanical.webp') center / 100% 100% no-repeat}
+  #field{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  button,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  button:focus-visible,select:focus-visible{outline:2px solid #fff0aa;outline-offset:3px}
+  #vase{position:absolute;left:7%;bottom:7%;width:132px;height:134px;border:0;background:transparent;padding:0;text-align:center}
+  #vase svg{position:absolute;width:58px;height:74px;bottom:20px;left:37px;overflow:visible}
+  #vase[aria-pressed=true] svg{filter:drop-shadow(0 0 6px #ffe7a4)}
+  #vase span{position:absolute;bottom:0;left:0;width:100%;color:#fff8d7;text-shadow:0 2px 6px #162819}
+  .wallpaper #shed{bottom:max(68px,8%)}
+  .wallpaper #vase{bottom:max(64px,8%)}
+  #shed{position:absolute;right:clamp(12px,4%,65px);bottom:clamp(16px,5%,54px);display:grid;gap:7px}
+  #basket{background:none;border:0;padding:1px;display:grid;justify-items:center;line-height:1.25;text-shadow:0 1px 4px #172219;min-width:64px}
+  #basket svg{width:62px;height:48px;filter:drop-shadow(0 3px 4px #1c2a1b77)}
+  #basket[aria-expanded=true] svg{filter:drop-shadow(0 1px 5px #ffdd8d99)}
+  #basket span{font-size:11px}
+  .wallpaper #basket span{display:none}
+  #seeds-panel{position:absolute;right:0;bottom:calc(100% + 9px);padding:13px 11px 10px;border-radius:15px;border:1px solid #deba7b9c;background:#24352af5;box-shadow:0 5px 18px #18221990;z-index:1}
+  #seeds-panel #shears{margin:8px 0 0 auto;display:block;color:#fff8db;border:1px solid #deba7b9c;background:#304436;border-radius:7px;padding:4px 9px}
+  #rack{display:flex;gap:7px}
+  .seed{width:56px;min-height:55px;padding:6px 2px 3px;border:1px solid #d4b986;border-radius:3px;background:#e8d2a3;color:#393f2a;transform:rotate(-3deg);box-shadow:0 4px 12px #16281965;position:relative;font-size:10px;line-height:1.35}
+  .seed::before{content:"";position:absolute;width:5px;height:9px;background:#a07145;left:calc(50% - 2px);top:-7px;border-radius:2px}
+  .seed:nth-child(2){transform:rotate(3deg);margin-top:4px}
+  .seed:nth-child(3){transform:rotate(-1deg)}
+  .seed[aria-pressed=true]{outline:2px solid #fff2b4;outline-offset:2px;background:#fae8bc}
+  #controls{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+  #planting-done{white-space:nowrap}
+  #controls button:not(#basket),#options{border:1px solid #eadb9e55;border-radius:9px;background:#243d2aeb;color:#fff7d8;padding:5px 9px}
+  #controls button:not(#basket)[aria-pressed=true]{background:#f5dfa6;color:#253a24}
+  #options{position:absolute;bottom:100%;right:0;margin-bottom:14px;min-width:190px;padding:10px 12px}
+  #options label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:6px 0}
+  #options button{width:100%;background:#35543c;border:1px solid #e6d5a477;border-radius:5px;padding:3px 7px}
+  #options button:disabled{opacity:.55;cursor:default}
+  #options select{background:#314a30;border:1px solid #e6d5a477;border-radius:5px;padding:2px}
+  #status{position:absolute;pointer-events:none;bottom:3%;left:50%;transform:translateX(-50%);width:max-content;max-width:80vw;text-align:center;padding:4px 11px;background:#1d3525db;border-radius:12px}
+  .wallpaper #status{bottom:max(90px,11%)}
+  #status:empty{display:none}
+  @media(max-width:550px){#vase{left:1%;bottom:8%;transform:scale(.78);transform-origin:bottom left}#shed{right:10px}#status{bottom:1%}}
+</style>
+</head>
+<body>
+<canvas id="field" aria-label="池塘和可播种的岸边草地"></canvas>
+<button id="vase" aria-label="花瓶" aria-pressed="false">
+  <svg viewBox="0 0 58 74" aria-hidden="true">
+    <ellipse cx="29" cy="68" rx="26" ry="6" fill="#2d422a" opacity=".58"/>
+    <defs><linearGradient id="glass" x2="100%" y2="20%"><stop stop-color="#a9dbbc" stop-opacity=".58"/><stop offset=".5" stop-color="#c3e6c9" stop-opacity=".27"/><stop offset="1" stop-color="#5c9479" stop-opacity=".68"/></linearGradient></defs>
+    <path d="M18 12h22l-3 17c1 11 13 13 12 26-1 12-11 14-20 14S10 67 9 55c-1-13 11-15 12-26Z" fill="url(#glass)" stroke="#c7e6b4" stroke-width="1.2"/>
+    <path d="M18 12c0-5 22-5 22 0s-22 5-22 0Z" fill="#74957b" stroke="#d7ebbb"/>
+    <path d="M12 53q17 8 34 0" fill="none" stroke="#dfefcd" opacity=".6"/>
+  </svg>
+  <span>花瓶 · 0 枝</span>
+</button>
+<section id="shed" aria-label="园艺工具">
+  <div id="seeds-panel" hidden>
+    <div id="rack" aria-label="篮子里的种子"></div>
+    <button id="shears" type="button" aria-pressed="false">剪刀</button>
+  </div>
+  <div id="controls">
+    <button id="planting-done" type="button" hidden>完成</button>
+    <button id="basket" type="button" aria-label="种子篮" aria-controls="seeds-panel" aria-expanded="false" title="打开种子篮">
+      <svg viewBox="0 0 68 53" aria-hidden="true">
+        <path d="M17 27C17 4 49 4 51 27" fill="none" stroke="#6c452f" stroke-width="6"/>
+        <path d="M17 26C17 4 49 4 51 26" fill="none" stroke="#d9ad67" stroke-width="3"/>
+        <path d="M8 25Q34 30 60 25L55 44Q52 48 34 49Q15 48 13 44Z" fill="#ac7544" stroke="#e9bb77" stroke-width="2"/>
+        <path d="M12 32Q34 39 57 32M13 38Q34 44 55 38M15 44Q34 49 53 44" fill="none" stroke="#e1b77a" stroke-width="1.7"/>
+        <path d="M19 30L22 46M27 32L28 48M35 32V48M42 31L41 48M50 30L47 46" stroke="#795133" stroke-width="1.4"/>
+        <path d="M10 25Q34 19 59 25Q59 30 34 32Q10 31 10 25Z" fill="#c99a62" stroke="#efc68c" stroke-width="1.8"/>
+        <path d="M28 24Q24 17 33 15Q38 19 32 24M35 24Q36 16 44 18Q44 24 35 24" fill="#829849"/>
+      </svg>
+      <span>种子篮</span>
+    </button>
+    <button id="settings" aria-expanded="false">设置</button>
+  </div>
+  <div id="options" hidden>
+    <label>画面特效 <select id="effects"><option value="still">静态</option><option value="soft">柔和</option><option value="rich">丰富</option></select></label>
+    <button id="tour" aria-pressed="false">预览一天 · 45 秒</button>
+    <label>加速试玩 <input id="fast" type="checkbox"></label>
+    <button id="remove-stem" disabled>取出花瓶里最早的一枝</button>
+  </div>
+</section>
+<div id="status" role="status"></div>
+<script>
+'use strict';
+const field=document.querySelector('#field'), c=field.getContext('2d'), $=id=>document.getElementById(id);
+const rack=$('rack'), seedsPanel=$('seeds-panel'), basket=$('basket'), vase=$('vase'), shears=$('shears'), effects=$('effects'), fast=$('fast');
+const species=[
+  {name:'波斯菊',petals:8,color:'#ef9bb7',shade:'#a83967',center:'#f2b747'},
+  {name:'雏菊',petals:12,color:'#fff2cc',shade:'#bbad93',center:'#e7a637'},
+  {name:'蓝矢车菊',petals:7,color:'#aaa5ee',shade:'#4f549c',center:'#743f84'}
+];
+const palette=[...species,
+  {petals:5,color:'#ef5852',shade:'#8c292e',center:'#533f2c',cup:true},
+  {petals:12,color:'#ffcb49',shade:'#ce8527',center:'#75461c'},
+  {petals:7,color:'#f1be8e',shade:'#bd7057',center:'#804b36'},
+  {petals:9,color:'#f294b4',shade:'#90456e',center:'#73314e'},
+  {petals:6,color:'#ac96d4',shade:'#594881',center:'#e4c380',spike:true},
+  {petals:9,color:'#f5efca',shade:'#b9b57a',center:'#c5a342',spike:true},
+  {petals:6,color:'#ef901e',shade:'#aa5f2a',center:'#49381e',cup:true}];
+const STORE='pond-garden-v2', HOURS=5*60*60*1000, DEMO=6000, CAP=360, VASE_CAP=8, LANTERN_CAP=4;
+const PIXELS=1920*1080, TOUR_MS=45000, TWO_PI=Math.PI*2, reduced=matchMedia('(prefers-reduced-motion:reduce)');
+const validFlower=f=>f&&Number.isInteger(f.kind)&&f.kind>=0&&f.kind<species.length&&typeof f.id==='string';
+let data={flowers:[],vase:[],held:null,lanterns:[],settings:{effects:'soft',fast:false}};
+let storageReadable=true;
+try{
+  const saved=JSON.parse(localStorage.getItem(STORE));
+  if(saved){
+    data.flowers=Array.isArray(saved.flowers)?saved.flowers.filter(f=>validFlower(f)&&[f.x,f.y,f.at].every(Number.isFinite)&&f.x>=0&&f.x<=1&&f.y>=0&&f.y<=1&&[HOURS,DEMO].includes(f.duration)).slice(0,CAP):[];
+    data.vase=Array.isArray(saved.vase)?saved.vase.filter(validFlower).slice(0,VASE_CAP):[];
+    data.held=validFlower(saved.held)?saved.held:null;
+    if(Array.isArray(saved.lanterns))data.lanterns=saved.lanterns.filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>.018&&p.x<.982&&p.y>.052&&p.y<.963).slice(0,LANTERN_CAP);
+    data.settings.effects=['still','soft','rich'].includes(saved.settings?.effects)?saved.settings.effects:'soft';
+    data.settings.fast=saved.settings?.fast===true;
+  }
+}catch{storageReadable=false;}
+let renderedFrames=0;
+let W,H,tool=0,plantingMode=false,drawing=null,previous=null,frame=0,ambient=0,stageTimer=0,statusTimer=0,particles=[],visible=true,tourStart=null,carriedFly=null;
+const visibleFlies=[], capturedFlies=new Set();
+let wasNight=false;
+const wild=[];
+const botanical=new Image();
+botanical.src='pond-botanical-atlas.webp';
+botanical.onload=()=>requestDraw();
+const botanicalKinds=[[0,1],[2,3],[8,9],[6,7],[4],[5],[0,1],[10],[5],[4]];
+// Outline traced in normalized coordinates from the new painted pond.
+const bank=[[.195,.415],[.212,.34],[.244,.276],[.282,.227],[.337,.184],[.398,.147],[.46,.137],[.54,.139],
+  [.62,.133],[.697,.145],[.765,.16],[.834,.192],[.9,.229],[.93,.27],[.945,.33],[.958,.408],
+  [.965,.495],[.962,.566],[.939,.629],[.899,.683],[.838,.723],[.771,.753],[.698,.78],
+  [.615,.797],[.532,.799],[.458,.777],[.387,.734],[.327,.686],[.279,.651],[.239,.599],[.211,.538],[.197,.482]];
+function inWater(u,v){
+  let inside=false;
+  for(let i=0,j=bank.length-1;i<bank.length;j=i++){
+    const [x,y]=bank[i],[a,b]=bank[j];
+    if((y>v)!==(b>v)&&u<(a-x)*(v-y)/(b-y)+x)inside=!inside;
+  }
+  return inside;
+}
+let sceneSeed=44981;
+function sceneRandom(){sceneSeed=(Math.imul(1664525,sceneSeed)+1013904223)>>>0;return sceneSeed/4294967296;}
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const smooth=x=>{ x=clamp(x);return x*x*(3-2*x); };
+// Local wall time is read each frame; this also follows OS time zone changes.
+function sceneHour(now){
+  if(tourStart!==null)return 5.5+19*clamp((now-tourStart)/TOUR_MS);
+  const d=new Date(now);
+  return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600;
+}
+function gatherWildflowers(){
+  const clumps=Array.from({length:143},(_,i)=>{
+    const j=Math.floor(sceneRandom()*bank.length),a=bank[j],b=bank[(j+1)%bank.length],v=sceneRandom();
+    const x=a[0]*(1-v)+b[0]*v,y=a[1]*(1-v)+b[1]*v;
+    const r=i<104?1.015+sceneRandom()*.30:1.27+sceneRandom()*.43;
+    return {x:.58+(x-.58)*r,y:.46+(y-.46)*r,
+      kind:Math.floor(sceneRandom()*palette.length),early:sceneRandom(),radius:.012+sceneRandom()*.038};
+  });
+  for(const patch of clumps){
+    const n=5+Math.floor(sceneRandom()*7);
+    for(let i=0;i<n;i++){
+      const a=sceneRandom()*TWO_PI,r=Math.sqrt(sceneRandom())*patch.radius;
+      const x=patch.x+Math.cos(a)*r,y=patch.y+Math.sin(a)*r*1.32;
+      if(!(x>.012&&x<.997&&y>.025&&y<.98)||inWater(x,y+.012))continue;
+      const kind=sceneRandom()<.77?patch.kind:Math.floor(sceneRandom()*palette.length);
+      const tiles=botanicalKinds[kind], tile=tiles[Math.floor(sceneRandom()*tiles.length)];
+      wild.push({x,y,kind,tile,size:(.19+Math.pow(sceneRandom(),1.4)*.52)*(.82+y*.36),
+        opens:6.8+patch.early*5.9+sceneRandom()*1.5,wave:sceneRandom()*TWO_PI,
+        lean:(sceneRandom()-.5)*.89,flip:sceneRandom()<.5?-1:1,motion:sceneRandom()<.22});
+    }
+  }
+  wild.sort((a,b)=>a.y-b.y);
+}
+function glow(x,y,sx,sy,rgb,opacity){
+  if(opacity<.005)return;
+  c.save();c.translate(x,y);c.scale(sx,sy);
+  const g=c.createRadialGradient(0,0,0,0,0,1);
+  g.addColorStop(0,'rgba('+rgb+','+opacity+')');
+  g.addColorStop(.46,'rgba('+rgb+','+(opacity*.63)+')');g.addColorStop(1,'rgba('+rgb+',0)');
+  c.fillStyle=g;c.fillRect(-1,-1,2,2);c.restore();
+}
+const fireflies=Array.from({length:21},(_,i)=>{
+  const [x,y]=bank[(i*11+3)%bank.length],f=1.17+(i%4)*.045;
+  return {x:.58+(x-.58)*f,y:.46+(y-.46)*f,phase:i*2.39996,speed:.48+(i%5)*.12};
+});
+function fireflyState(f,t){
+  const a=f.phase+t*f.speed,b=f.phase*1.9+t*.61;
+  return {
+    x:clamp(f.x+.041*Math.sin(a)+.017*Math.cos(b),.022,.978),
+    y:clamp(f.y+.047*Math.cos(a*.92)+.017*Math.sin(b),.047,.94),
+    blink:.12+.88*Math.pow(.5+.5*Math.sin(t*2.4+f.phase),2.4)
+  };
+}
+const reflectedStars=Array.from({length:35},(_,i)=>({
+  x:.23+((i*113+17)%347)/490, y:.19+((i*71+32)%317)/560, phase:i*2.39996
+})).filter(p=>inWater(p.x,p.y));
+function waterStars(t,night){
+  if(night<.12)return;
+  c.lineCap='round';
+  for(const s of reflectedStars){
+    const shiver=.5+.5*Math.sin(t*1.7+s.phase), x=(s.x+.0021*Math.sin(t*.88+s.phase))*W;
+    const y=(s.y+.0014*Math.cos(t*1.3+s.phase))*H;
+    const light=night*(.13+.48*shiver*shiver);
+    const width=.39+shiver*1.25;
+    c.strokeStyle='rgba(192,220,248,'+light+')';c.lineWidth=.72;
+    c.beginPath();c.moveTo(x-width,y);c.lineTo(x+width,y+.24);c.stroke();
+    if(shiver>.82)oval(c,x,y,.63,.64,0,'rgba(229,240,255,'+light+')');
+  }
+}
+function nightLevel(h){
+  return Math.max(1-smooth((h-4.8)/2.2),smooth((h-18.4)/2.4));
+}
+function drawLantern(p,t,night){
+  const x=p.x*W,y=p.y*H,z=Math.max(.75,scale()),pulse=.88+.12*Math.sin(t*1.8+p.x*20);
+  glow(x,y-4*z,49*z,23*z,'186,231,111',night*.43*pulse);
+  oval(c,x,y+1*z,10*z,3.8*z,0,'#1c322993');
+  c.save();c.translate(x,y);c.scale(z,z);
+  const g=c.createLinearGradient(-7,0,7,0);
+  g.addColorStop(0,'#b3c6a373');g.addColorStop(.5,'rgba(201,240,138,'+(.27+night*.45*pulse)+')');g.addColorStop(1,'#476b58ba');
+  c.fillStyle=g;c.strokeStyle='#b0c79aac';c.lineWidth=1.05;
+  c.beginPath();c.moveTo(-5,-25);c.lineTo(5,-25);c.lineTo(6,-20);
+  c.quadraticCurveTo(9,-19,9,-14);c.lineTo(9,-5);c.quadraticCurveTo(9,0,4,0);
+  c.lineTo(-4,0);c.quadraticCurveTo(-9,0,-9,-5);c.lineTo(-9,-14);
+  c.quadraticCurveTo(-9,-19,-6,-20);c.closePath();c.fill();c.stroke();
+  c.fillStyle='#8a7350';c.fillRect(-6,-25,12,3.6);
+  glow(1,-11,7,8,'226,249,135',night*.65*pulse);
+  if(night>.08)oval(c,1.4*Math.sin(t*2.1),-11+1.7*Math.cos(t*2.4),1.5,1.25,0,'rgba(245,255,192,'+night+')');
+  c.restore();
+}
+function paintLight(t,h,animated,rich){
+  const morning=smooth((h-4.8)/2)*smooth((10-h)/3.4);
+  const dusk=smooth((h-14.5)/3.3)*smooth((21-h)/2.5);
+  const night=nightLevel(h);
+  visibleFlies.length=0;
+  if(night<=.08&&wasNight){capturedFlies.clear();carriedFly=null;}
+  wasNight=night>.08;
+  if(night>.005){c.fillStyle='rgba(11,24,45,'+(night*.47)+')';c.fillRect(0,0,W,H);}
+  if(morning>.005)glow(W*.16,H*.12,W*.9,H*.94,'255,230,145',morning*.30);
+  if(dusk>.005)glow(W*.77,H*.42,W*.77,H*.77,'248,124,43',dusk*.26);
+  const phases=animated?t/1000:0;
+  c.save();c.beginPath();
+  bank.forEach(([x,y],i)=>i===0?c.moveTo(x*W,y*H):c.lineTo(x*W,y*H));
+  c.closePath();c.clip();
+  if(night>.005){
+    c.fillStyle='rgba(7,16,65,'+(night*.34)+')';c.fillRect(0,0,W,H);
+    // Low reflected light along the existing submerged rocks.
+    glow(W*.276,H*.309,W*.145,H*.155,'105,167,168',night*.16);
+    glow(W*.226,H*.485,W*.091,H*.142,'94,165,191',night*.12);
+  }
+  glow(W*(.52+.022*Math.sin(phases*.39)),H*.39,W*.25,H*.19,'255,187,99',dusk*.80);
+  glow(W*.54,H*.39,W*.22,H*.12,'182,232,231',morning*.22);
+  waterStars(phases,night);
+  const mx=W*(.665+.008*Math.sin(phases*.28)),my=H*.407;
+  glow(mx,my,W*.058,H*.105,'155,205,255',night*.32);
+  if(night>.04){
+    glow(mx,my,W*.011,H*.021,'221,239,255',night*.81);
+    oval(c,mx,my,W*.0041,H*.0085,0,'rgba(233,246,255,'+(night*.77)+')');
+  }
+  if(animated||night>.04){
+    c.lineCap='round';
+    for(let i=0;i<(rich?25:12);i++){
+      const py=H*(.27+((i*37)%99)/238),px=W*(.34+((i*53)%100)/200+.009*Math.sin(phases*.7+i));
+      const a=(.038+.031*Math.sin(i+phases))*((1-night)*.8+.2);
+      c.strokeStyle='rgba(215,244,239,'+a+')';c.lineWidth=1;
+      c.beginPath();c.moveTo(px,py);c.lineTo(px+W*(.011+((i*11)%13)/900),py);c.stroke();
+    }
+    for(let i=0;i<27&&night>.04;i++){
+      const v=i/27, py=my+H*(.008+v*.123);
+      const shimmer=.5+.5*Math.sin(i*2.32+phases*2.1);
+      const shift=W*(.0014+v*.007)*Math.sin(i*1.7+phases*1.9);
+      const w=W*(.002+shimmer*.0045)*(1+v*.54);
+      c.strokeStyle='rgba(207,231,255,'+(night*(1-v)*(.10+.43*shimmer))+')';
+      c.lineWidth=i%3===0?1.6:.85;
+      c.beginPath();c.moveTo(mx+shift-w,py);c.lineTo(mx+shift+w,py+.3*Math.sin(i));c.stroke();
+    }
+  }
+  c.restore();
+  for(const p of data.lanterns)drawLantern(p,phases,night);
+  if(night>.08){
+    const count=rich?fireflies.length:14;
+    for(let i=0;i<count;i++){
+      if(capturedFlies.has(i))continue;
+      const f=fireflies[i], p=fireflyState(f,phases);
+      const px=W*p.x,py=H*p.y,energy=night*Math.max(.2,p.blink);
+      visibleFlies.push({i,x:px,y:py});
+      const radius=3.2+energy*10;
+      glow(px,py,radius,radius,'212,242,102',energy*.63);
+      if(animated&&energy>.53){
+        const last=fireflyState(f,phases-.09);
+        c.strokeStyle='rgba(220,245,132,'+(energy*.22)+')';
+        c.lineWidth=1;c.beginPath();c.moveTo(last.x*W,last.y*H);c.lineTo(px,py);c.stroke();
+      }
+      oval(c,px,py,1.2+energy*1.02,1.05+energy*.73,0,'rgba(251,255,179,'+(energy*.92)+')');
+    }
+  }
+}
+function nextAmbient(animated,now){
+  clearTimeout(ambient);
+  if(visible&&!document.hidden)ambient=setTimeout(requestDraw, tourStart!==null||animated?76:60000-(now%60000)+12);
+}
+function toggleTour(){
+  tourStart=tourStart===null?Date.now():null;
+  syncTour();requestDraw();
+}
+function syncTour(){
+  $('tour').setAttribute('aria-pressed',String(tourStart!==null));
+  $('tour').textContent=tourStart===null?'预览一天 · 45 秒':'结束预览 · 恢复本地时间';
+}
+const atlas=document.createElement('canvas'), ac=atlas.getContext('2d'), cell=80;
+atlas.width=cell*4;atlas.height=cell*palette.length;
+function oval(ctx,x,y,a,b,rotation,fill){
+  ctx.fillStyle=fill;ctx.beginPath();ctx.ellipse(x,y,a,b,rotation,0,TWO_PI);ctx.fill();
+}
+function makeAtlas(){
+  palette.forEach((type,k)=>{
+    for(let s=0;s<4;s++){
+      ac.save();ac.translate(cell*s,cell*k);
+      const x=40,b=74,h=[3,18,34,48][s],top=b-h, head=3+((k*29)%7)-3;
+      ac.strokeStyle='#4d783c';ac.lineWidth=1.5;ac.beginPath();ac.moveTo(x,b);
+      ac.quadraticCurveTo(x-5,top+8,x+head,top);ac.stroke();
+      for(let j=0;j<(s===0?1:3);j++){
+        const dir=j%2===0?-1:1, yy=b-h*(.2+j*.20), xx=x-2;
+        const len=(s===0?3:6+h*.1)*(1-j*.11);
+        const g=ac.createLinearGradient(xx,yy,xx+dir*len,yy-7);
+        g.addColorStop(0,'#365b33');g.addColorStop(.54,'#7b9b44');g.addColorStop(1,'#a6b865');
+        ac.fillStyle=g;ac.beginPath();ac.moveTo(xx,yy);
+        ac.quadraticCurveTo(xx+dir*len*.46,yy-8,xx+dir*len,yy-6);
+        ac.quadraticCurveTo(xx+dir*len*.54,yy+1.7,xx,yy);ac.fill();
+      }
+      if(s===2)oval(ac,x+head,top,4.2,5.7,.22,type.shade);
+      if(s===3&&type.spike){
+        for(let j=0;j<12;j++){
+          const y=top-11+j*2.2,rx=2+j*.32,xx=x+head+(j%2===0?-1:1)*rx*.62;
+          oval(ac,xx,y,rx,2.7,j%2===0?.45:-.45,type.shade);
+          oval(ac,xx+.4,y-.67,rx*.81,1.95,j%2===0?.45:-.45,type.color);
+        }
+      }else if(s===3){
+        for(let i=0;i<type.petals;i++){
+          const a=i*TWO_PI/type.petals+.11*Math.sin(i*3+k);
+          const r=(type.cup?8.7:k===1?12:10.9)+1.2*Math.sin(i*4+k);
+          const l=8.6+1.2*Math.cos(i*5+k),w=type.cup?7.6:k===1?3.9:5.4;
+          ac.save();ac.translate(x+head+Math.cos(a)*r,top+Math.sin(a)*r*.8);ac.rotate(a);
+          const g=ac.createLinearGradient(-l,1,l,-2);
+          g.addColorStop(0,type.shade);g.addColorStop(.58,type.color);g.addColorStop(.81,type.color);g.addColorStop(1,'#fff3da');
+          ac.fillStyle=g;ac.beginPath();ac.moveTo(-l,0);
+          ac.bezierCurveTo(-l*.35,-w*.3,l*.4,-w*1.44,l*.88,-w*.76);
+          ac.bezierCurveTo(l*1.12,-w*.43,l*.95,w*.95,l*.53,w*.98);
+          ac.quadraticCurveTo(-l*.2,w*.73,-l,0);ac.fill();
+          ac.strokeStyle=type.shade+'40';ac.lineWidth=.48;ac.beginPath();ac.moveTo(-l*.95,0);ac.quadraticCurveTo(0,w*.22,l*.7,w*.36);ac.stroke();
+          ac.restore();
+        }
+        const cx=x+head;
+        oval(ac,cx,top,5.9,4.9,0,type.shade);oval(ac,cx-.4,top-.7,4.7,3.6,0,type.center);
+        for(let i=0;i<12;i++){
+          const a=i*2.4,r=Math.sqrt(i/12)*4;
+          oval(ac,cx+Math.cos(a)*r,top-.65+Math.sin(a)*r*.72,.72,.57,a,i%3?'#fff3ac80':'#54403180');
+        }
+      }
+      ac.restore();
+    }
+    if(k>=species.length)return;
+    const b=document.createElement('button');b.className='seed';b.setAttribute('aria-label',type.name);b.setAttribute('aria-pressed',String(k===0));
+    const icon=document.createElement('span');icon.textContent=['✿','❋','✽'][k];icon.style.cssText='display:block;font-size:23px;color:'+type.shade;
+    b.append(icon,document.createTextNode(type.name));
+    b.onclick=()=>select(k);
+    rack.append(b);
+  });
+}
+function info(message){
+  const s=$('status');s.textContent=message;clearTimeout(statusTimer);statusTimer=setTimeout(()=>s.textContent='',2800);
+}
+function persist(){
+  try{localStorage.setItem(STORE,JSON.stringify(data));}
+  catch{info('本地存储不可用。本次种植仍可继续。');}
+}
+function stage(f,now){
+  return Math.min(3, Math.max(0, Math.floor((now-f.at)*3/f.duration)));
+}
+function scheduleGrowth(){
+  clearTimeout(stageTimer);
+  if(!visible || document.hidden)return;
+  const now=Date.now();let next=Infinity;
+  for(const f of data.flowers){
+    const s=stage(f,now);
+    if(s<3)next=Math.min(next, f.at + f.duration*(s+1)/3);
+  }
+  if(Number.isFinite(next))stageTimer=setTimeout(()=>{requestDraw();scheduleGrowth();},Math.max(20,Math.ceil(next-now)+16));
+}
+function layout(){
+  W=field.clientWidth;H=field.clientHeight;
+  const d=Math.min(devicePixelRatio||1,Math.sqrt(PIXELS/Math.max(1,W*H)));
+  field.width=Math.max(1,Math.floor(W*d));field.height=Math.max(1,Math.floor(H*d));
+  c.setTransform(field.width/Math.max(1,W),0,0,field.height/Math.max(1,H),0,0);
+  requestDraw();
+}
+function requestDraw(){if(visible && !document.hidden && !frame)frame=requestAnimationFrame(draw);}
+function scale(){return Math.max(.44,Math.min(1.28,H/880));}
+function sprite(f,s,x,y,z,angle=0){
+  c.save();c.translate(x,y);c.rotate(angle);
+  if(f.tilt)c.transform(f.tilt,0, (f.turn??0)*.13,1,0,0);
+  c.drawImage(atlas,cell*s,cell*f.kind,cell,cell,-40*z,-74*z,cell*z,cell*z);
+  c.restore();
+}
+function botanicalSprite(tile,x,y,z,angle,flip){
+  c.save();c.translate(x,y);c.rotate(angle);c.scale(flip,1);
+  const w=83*z;
+  c.drawImage(botanical,(tile%4)*128,Math.floor(tile/4)*128,128,128,-w*.5,-w*.96,w,w);
+  c.restore();
+}
+function draw(t){
+  renderedFrames++;
+  if(new URLSearchParams(location.search).get("diagnostics")==="1")window.chrome?.webview?.postMessage({type:"frame",frameCount:renderedFrames});
+  frame=0;c.clearRect(0,0,W,H);
+  const now=Date.now(), z=scale();
+  if(tourStart!==null && now-tourStart>=TOUR_MS){tourStart=null;syncTour();}
+  const h=sceneHour(now), animated=data.settings.effects!=='still'&&!reduced.matches, rich=data.settings.effects==='rich';
+  const day=h<5?h+24:h, wind=animated?t/1000:0;
+  const reset=1-smooth((day-27)/2);
+  for(const f of wild){
+    const age=day-f.opens;
+    if(reset<=0)break;
+    if(age<-.9)continue;
+    const growth=smooth((age+.9)/1.85), bloom=smooth((age+.14)/1.05);
+    const lean=f.lean+(animated&&f.motion?Math.sin(wind*1.55+f.wave)*.075:0);
+    const x=f.x*W,y=f.y*H,size=z*f.size*(.23+.77*growth);
+    if(botanical.naturalWidth){
+      c.globalAlpha=reset*(1-bloom)*.80;
+      if(bloom<1)botanicalSprite(11,x,y,size*.66,lean,f.flip);
+      if(bloom>0){
+        c.globalAlpha=bloom*reset;
+        botanicalSprite(f.tile,x,y,size*(.73+.27*bloom),lean,f.flip);
+        // Leaves nearest the viewer hide part of selected stems.
+        if(f.motion){c.globalAlpha=.63*bloom*reset;botanicalSprite(11,x+size*9,y+size*5,size*.40,-lean,f.flip);}
+      }
+    }else{
+      c.globalAlpha=reset;sprite(f,bloom>.5?3:2,x,y,size,lean);
+    }
+    c.globalAlpha=1;
+  }
+  const list=[...data.flowers].sort((a,b)=>a.y-b.y);
+  for(const f of list){
+    const phase=stage(f,now),x=f.x*W,y=f.y*H,lean=((f.x*657)%1-.5)*.25;
+    if(phase===3&&botanical.naturalWidth)botanicalSprite(botanicalKinds[f.kind][0],x,y,z*.76,lean,1);
+    else sprite(f,phase,x,y,z,lean);
+  }
+  const b=vase.getBoundingClientRect(), baseX=b.left+b.width*.5, baseY=b.top+b.height*.55;
+  const n=data.vase.length;
+  data.vase.forEach((f,i)=>{
+    const spread=i-(n-1)/2;
+    sprite(f,3,baseX+spread*1.7,baseY+4,1.05+((i*7)%4)*.11,spread*.19);
+  });
+  paintLight(t,h,animated,rich);
+  particles=particles.filter(p=>t-p.t<700);
+  if(particles.length){
+    for(const p of particles){
+      const k=Math.max(0,(t-p.t)/700);
+      c.globalAlpha=(1-k)*.75;oval(c,p.x+p.dx*k,p.y+p.dy*k,2.2,3.5,k*5,p.color);
+    }
+    c.globalAlpha=1;
+  }
+  nextAmbient(animated||particles.length>0,now);
+}
+function burst(x,y,kind){
+  if(data.settings.effects==='still'||reduced.matches)return;
+  const count=data.settings.effects==='rich'?8:3,t=performance.now();
+  for(let i=0;i<count;i++){
+    const a=Math.random()*TWO_PI,r=9+Math.random()*26;
+    particles.push({x,y,t,dx:Math.cos(a)*r,dy:Math.sin(a)*r-9,color:species[kind].color});
+  }
+  if(particles.length>64)particles=particles.slice(-64);
+}
+function shore(u,v){
+  return u>.018&&u<.982&&v>.052&&v<.963&&!inWater(u,v);
+}
+function sow(x,y,feedback){
+  const u=x/W,v=y/H;
+  if(!shore(u,v)){if(feedback)info('把种子撒在池塘岸边的草地上。');return;}
+  if(data.flowers.length>=CAP){if(feedback)info('草地种满了。剪下一些花再播种。');return;}
+  if(data.flowers.some(f=>Math.hypot((f.x-u)*W,(f.y-v)*H)<9*scale())){
+    if(feedback&&plantingMode)info('这里已经播种，试试旁边的草地。');
+    return;
+  }
+  data.flowers.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,9),kind:tool,x:u,y:v,at:Date.now(),duration:data.settings.fast?DEMO:HOURS});
+  burst(x,y,tool);requestDraw();
+  if(feedback&&plantingMode)info('已种下'+species[tool].name+'。');
+}
+function plantStatus(x,y){
+  let best=null,dist=26*scale();
+  const now=Date.now();
+  for(const f of data.flowers){
+    const height=[3,18,34,48][stage(f,now)]*scale();
+    const dx=f.x*W-x, dy=f.y*H-y;
+    const p=Math.hypot(dx,dy-Math.max(0,Math.min(height,dy)));
+    if(p<dist){dist=p;best=f;}
+  }
+  if(!best){info('点一株已经开花的花。');return;}
+  if(stage(best,Date.now())<3){info('这株还没开花。');return;}
+  if(data.held){info('手里有一枝花，先点花瓶插好。');return;}
+  if(data.vase.length>=VASE_CAP){info('花瓶已插满。');return;}
+  data.flowers=data.flowers.filter(f=>f.id!==best.id);
+  data.held={id:best.id,kind:best.kind};
+  persist();sync();burst(x,y,best.kind);requestDraw();scheduleGrowth();
+  info('剪下'+species[best.kind].name+'。点花瓶插好。');
+}
+function showSeeds(open){
+  seedsPanel.hidden=!open;
+  basket.setAttribute('aria-expanded',String(open));
+  if(open){$('options').hidden=true;$('settings').setAttribute('aria-expanded','false');}
+}
+function select(next){
+  const wasOpen=!seedsPanel.hidden;
+  if(carriedFly!==null){capturedFlies.delete(carriedFly);carriedFly=null;requestDraw();}
+  showSeeds(false);tool=next;
+  plantingMode=typeof next==='number'&&document.body.classList.contains('wallpaper');sync();
+  if(wasOpen&&!document.body.classList.contains('wallpaper'))basket.focus({preventScroll:true});
+  info(next==='cut'?'剪刀已选。点一株开花的花。':species[next].name+'已选。点按或拖动撒种。');
+}
+function sync(){
+  [...rack.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(i===tool)));
+  shears.setAttribute('aria-pressed',String(tool==='cut'));
+  $('planting-done').hidden=!plantingMode;
+  $('planting-done').textContent=plantingMode?species[tool].name+' · 完成':'完成';
+  vase.setAttribute('aria-pressed',String(Boolean(data.held)));
+  vase.querySelector('span').textContent=data.held?'插入手里的花':'花瓶 · '+data.vase.length+' 枝';
+  vase.querySelector('span').hidden=document.body.classList.contains('wallpaper')&&!data.held;
+  $('remove-stem').disabled=data.vase.length===0;
+  field.style.cursor=tool==='cut'?'pointer':'crosshair';
+}
+function lanternClick(x,y){
+  const atNight=nightLevel(sceneHour(Date.now()))>.08;
+  if(carriedFly!==null){
+    if(!atNight){carriedFly=null;return false;}
+    if(!shore(x/W,y/H)){info('把萤火虫瓶放在草地上。');return true;}
+    const position={x:x/W,y:y/H};
+    if(data.lanterns.some(p=>Math.hypot((p.x-position.x)*W,(p.y-position.y)*H)<25)){
+      info('这里已经有一只瓶子。换一块草地吧。');return true;
+    }
+    data.lanterns.push(position);carriedFly=null;persist();requestDraw();
+    info('萤火虫瓶已放好。');return true;
+  }
+  const jar=data.lanterns.findIndex(p=>Math.hypot(p.x*W-x,p.y*H-y-13*scale())<22);
+  if(jar>=0){
+    data.lanterns.splice(jar,1);persist();requestDraw();info('收起了萤火虫瓶。');return true;
+  }
+  if(!atNight)return false;
+  let hit=null,d=19;
+  for(const p of visibleFlies){
+    if(capturedFlies.has(p.i))continue;
+    const dist=Math.hypot(p.x-x,p.y-y);
+    if(dist<d){hit=p;d=dist;}
+  }
+  if(!hit)return false;
+  if(data.lanterns.length>=LANTERN_CAP){info('最多放四只萤火虫瓶。点旧瓶就能收起。');return true;}
+  carriedFly=hit.i;capturedFlies.add(hit.i);requestDraw();
+  info('捉到了。再点一块草地放瓶。');return true;
+}
+function begin(id,x,y){
+  if(drawing!==null)return;
+  if(!seedsPanel.hidden){showSeeds(false);return;}
+  if(tool==='cut'){plantStatus(x,y);return;}
+  if(lanternClick(x,y))return;
+  drawing=id;previous=[x,y];sow(x,y,true);
+}
+function move(id,x,y){
+  if(drawing!==id)return;
+  const [a,b]=previous,dist=Math.hypot(x-a,y-b),gap=20*scale();
+  for(let d=gap;d<=dist;d+=gap){const u=a+(x-a)*d/dist,v=b+(y-b)*d/dist;sow(u,v,false);previous=[u,v];}
+}
+function finish(id){
+  if(drawing===null || (id!==undefined && drawing!==id))return;
+  drawing=null;previous=null;persist();scheduleGrowth();
+}
+makeAtlas();gatherWildflowers();sync();
+if(!storageReadable)info('未能读取旧存档。当前可继续种植。');
+field.addEventListener('pointerdown',e=>{
+  if(e.button!==0)return;
+  begin(e.pointerId,e.clientX,e.clientY);
+  if(drawing===e.pointerId)try{field.setPointerCapture(e.pointerId);}catch{}
+});
+field.addEventListener('pointermove',e=>move(e.pointerId,e.clientX,e.clientY));
+for(const name of ['pointerup','pointercancel','lostpointercapture'])window.addEventListener(name,e=>finish(e.pointerId));
+addEventListener('blur',()=>finish());
+addEventListener('pagehide',()=>finish());
+addEventListener('resize',layout);
+function onVisibility(on){
+  visible=Boolean(on);
+  if(!visible || document.hidden){finish();clearTimeout(ambient);if(frame)cancelAnimationFrame(frame);frame=0;particles=[];}
+  else requestDraw();
+  scheduleGrowth();
+}
+document.addEventListener('visibilitychange',()=>onVisibility(visible));
+vase.onclick=()=>{
+  if(!data.held){info(data.vase.length?'花瓶已有 '+data.vase.length+' 枝花。':'花瓶还是空的。开花后用剪刀收一枝。');return;}
+  if(data.vase.length>=VASE_CAP){info('花瓶已插满。');return;}
+  data.vase.push(data.held);data.held=null;persist();sync();requestDraw();info('插好啦。');
+};
+$('remove-stem').onclick=()=>{
+  if(!data.vase.length)return;
+  data.vase.shift();persist();sync();requestDraw();info('已取出最早的一枝。');
+};
+basket.onclick=()=>{plantingMode=false;sync();showSeeds(seedsPanel.hidden);};
+$('planting-done').onclick=()=>{finish();plantingMode=false;sync();info('已退出种植。');};
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!seedsPanel.hidden){showSeeds(false);basket.focus();}});
+shears.onclick=()=>select('cut');
+$('settings').onclick=()=>{
+  showSeeds(false);
+  const panel=$('options');panel.hidden=!panel.hidden;$('settings').setAttribute('aria-expanded',String(!panel.hidden));
+};
+$('tour').onclick=toggleTour;
+effects.value=data.settings.effects;fast.checked=data.settings.fast;
+effects.onchange=()=>{data.settings.effects=effects.value;particles=[];persist();requestDraw();};
+fast.onchange=()=>{data.settings.fast=fast.checked;persist();info(fast.checked?'之后播的种子约 6 秒开花。':'之后播的种子约 5 小时开花。');};
+window.meadowDesktop=(action,x,y)=>{
+  if(action==='flush'){finish();persist();return localStorage.getItem(STORE)===JSON.stringify(data);}
+  if(action==='tour'){toggleTour();return;}
+  if(action==='visible'){onVisibility(x);return;}
+  if(action==='wallpaper'){finish();plantingMode=false;showSeeds(false);document.body.classList.toggle('wallpaper',Boolean(x));sync();$('options').hidden=true;$('settings').setAttribute('aria-expanded','false');$('settings').hidden=Boolean(x);return;}
+  if(action==='down'||action==='plainDown'||action==='windowsDown'){
+    const hit=document.elementFromPoint(x,y);
+    if(action==='plainDown'||action==='windowsDown'){
+      const button=hit?.closest(action==='windowsDown'?'#basket,#rack button,#planting-done,#shears,#vase':'#basket,#rack button,#planting-done');
+      if(button){button.click();return;}
+      if(hit===field){
+        if(!seedsPanel.hidden){showSeeds(false);return;}
+        if(action==='windowsDown'&&tool==='cut'){plantStatus(x,y);return;}
+        if(action==='windowsDown'&&lanternClick(x,y))return;
+        if(plantingMode&&shore(x/W,y/H)){drawing='desktop';previous=[x,y];sow(x,y,true);}
+        else if(plantingMode)info('把种子撒在池塘岸边的草地上。');
+      }
+    }else if(hit===field)begin('desktop',x,y);
+    else if(hit?.closest('#shed,#vase'))hit.closest('button')?.click();
+  }else if(action==='drag')move('desktop',x,y);
+  else if(action==='up')finish('desktop');
+};
+window.meadowDiagnostics=()=>({ready:renderedFrames>0,frameCount:renderedFrames,flowerCount:data.flowers.length,width:W,height:H,visible,plantingMode,selected:tool,message:$('status').textContent});
+window.livelyWallpaperPlaybackChanged=payload=>{
+  try {
+    const status=typeof payload==='string'?JSON.parse(payload):payload;
+    if(typeof status?.IsPaused==='boolean')onVisibility(!status.IsPaused);
+  } catch {}
+};
+layout();scheduleGrowth();
+</script>
+</body>
+</html>
